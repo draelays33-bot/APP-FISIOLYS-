@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Cormorant Garamond", Georgia, serif;
+  --font-sans: "Plus Jakarta Sans", sans-serif;
+
+  --color-olive-50: #f7f8f3;
+  --color-olive-100: #eaf0db;
+  --color-olive-200: #d6e1b7;
+  --color-olive-300: #bbcd8b;
+  --color-olive-400: #9cb55e;
+  --color-olive-500: #7e983f;
+  --color-olive-600: #5f6d33;
+  --color-olive-700: #4a5629;
+  --color-olive-800: #3c4523;
+  --color-olive-900: #333a20;
+  --color-olive-950: #1a1e10;
+
+  --color-moss-50: #f4f7f4;
+  --color-moss-100: #e4ebe4;
+  --color-moss-200: #c9d8cb;
+  --color-moss-300: #a3bfaa;
+  --color-moss-400: #769e82;
+  --color-moss-500: #518163;
+  --color-moss-600: #3d674c;
+  --color-moss-700: #31523d;
+  --color-moss-800: #294232;
+  --color-moss-900: #23372b;
+  --color-moss-950: #121f18;
+
+  --color-gold-50: #fbf9f0;
+  --color-gold-100: #f5eed3;
+  --color-gold-200: #ebdca4;
+  --color-gold-300: #dec36e;
+  --color-gold-400: #d0a73b;
+  --color-gold-500: #bfa130;
+  --color-gold-600: #9e7f22;
+  --color-gold-700: #7e611d;
+  --color-gold-800: #684e1d;
+  --color-gold-900: #58411d;
+}
+
+@layer base {
+  body {
+    background-color: #f7f8f3;
+    color: #23372b;
+  }
+}
+
+.gold-gradient-text {
+  background: linear-gradient(135deg, #d0a73b 0%, #bfa130 50%, #7e611d 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-border-gradient {
+  border-image: linear-gradient(to right, #d0a73b, #769e82, #3d674c) 1;
+}
+
+.olive-gold-badge {
+  background: linear-gradient(135deg, rgba(95, 109, 51, 0.08) 0%, rgba(208, 167, 59, 0.12) 100%);
+  border: 1px solid rgba(208, 167, 59, 0.3);
+}

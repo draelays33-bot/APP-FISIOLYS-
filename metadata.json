@@ -1,0 +1,6 @@
+{
+  "name": "Fisiolys Fisioterapia e Pilates",
+  "description": "Sistema moderno e minimalista de agendamento online e gestão para Fisiolys Fisioterapia e Pilates em Altamira/PA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
