@@ -465,6 +465,41 @@ app.post('/api/appointments', async (req, res) => {
   res.json({ success: true, appointment: newAppt, webhookSent: webhookTriggered });
 });
 
+// Helper function to sync patient presence/absence stats
+function syncPatientStats(phoneOrName: string) {
+  if (!phoneOrName) return;
+  const cleanPhone = phoneOrName.replace(/\D/g, '');
+  const nameLower = phoneOrName.trim().toLowerCase();
+
+  const patient = db.patients.find(p => {
+    const pPhoneClean = p.phone.replace(/\D/g, '');
+    return (cleanPhone.length >= 6 && pPhoneClean.includes(cleanPhone)) || p.name.toLowerCase() === nameLower;
+  });
+
+  if (!patient) return;
+
+  const patientAppts = db.appointments.filter(a => {
+    const aPhoneClean = a.patientPhone.replace(/\D/g, '');
+    return (cleanPhone.length >= 6 && aPhoneClean.includes(cleanPhone)) || a.patientName.toLowerCase() === patient.name.toLowerCase();
+  });
+
+  const presencas = patientAppts.filter(a => a.status === 'concluido' || a.attendanceStatus === 'presenca').length;
+  const faltas = patientAppts.filter(a => a.status === 'falta' || a.attendanceStatus === 'falta').length;
+
+  patient.totalSessions = presencas;
+  patient.totalFaltas = faltas;
+
+  const sortedDates = patientAppts
+    .map(a => a.date)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+
+  if (sortedDates.length > 0) {
+    patient.firstSessionDate = sortedDates[0];
+    patient.lastSessionDate = sortedDates[sortedDates.length - 1];
+  }
+}
+
 app.patch('/api/appointments/:id', (req, res) => {
   const appt = db.appointments.find(a => a.id === req.params.id);
   if (!appt) {
@@ -473,13 +508,110 @@ app.patch('/api/appointments/:id', (req, res) => {
 
   if (req.body.status) {
     appt.status = req.body.status;
+    if (req.body.status === 'concluido') {
+      appt.attendanceStatus = 'presenca';
+    } else if (req.body.status === 'falta') {
+      appt.attendanceStatus = 'falta';
+    } else if (req.body.status === 'agendado') {
+      appt.attendanceStatus = 'pendente';
+    }
+  }
+  if (req.body.attendanceStatus) {
+    appt.attendanceStatus = req.body.attendanceStatus;
+    if (req.body.attendanceStatus === 'presenca') {
+      appt.status = 'concluido';
+    } else if (req.body.attendanceStatus === 'falta') {
+      appt.status = 'falta';
+    }
+  }
+  if (req.body.attendanceNotes !== undefined) {
+    appt.attendanceNotes = req.body.attendanceNotes;
   }
   if (req.body.notes !== undefined) {
     appt.notes = req.body.notes;
   }
 
+  syncPatientStats(appt.patientPhone);
+  syncPatientStats(appt.patientName);
+
   saveDatabase(db);
   res.json({ success: true, appointment: appt });
+});
+
+app.post('/api/appointments/mark-attendance', (req, res) => {
+  const { appointmentId, status, attendanceNotes } = req.body; // status: 'concluido' | 'falta' | 'agendado'
+  const appt = db.appointments.find(a => a.id === appointmentId);
+  if (!appt) {
+    return res.status(404).json({ error: "Agendamento não encontrado" });
+  }
+
+  appt.status = status;
+  if (status === 'concluido') {
+    appt.attendanceStatus = 'presenca';
+  } else if (status === 'falta') {
+    appt.attendanceStatus = 'falta';
+  } else {
+    appt.attendanceStatus = 'pendente';
+  }
+
+  if (attendanceNotes !== undefined) {
+    appt.attendanceNotes = attendanceNotes;
+  }
+
+  syncPatientStats(appt.patientPhone);
+  syncPatientStats(appt.patientName);
+
+  saveDatabase(db);
+  res.json({ success: true, appointment: appt });
+});
+
+app.get('/api/patient-history', (req, res) => {
+  const query = (req.query.query as string || '').trim();
+  if (!query) {
+    return res.status(400).json({ error: "Informe o telefone ou nome do paciente." });
+  }
+
+  const cleanQuery = query.replace(/\D/g, '');
+  const lowerQuery = query.toLowerCase();
+
+  const patient = db.patients.find(p => {
+    const pPhoneClean = p.phone.replace(/\D/g, '');
+    return (cleanQuery.length >= 4 && pPhoneClean.includes(cleanQuery)) || p.name.toLowerCase().includes(lowerQuery);
+  });
+
+  const matchedAppointments = db.appointments.filter(a => {
+    const aPhoneClean = a.patientPhone.replace(/\D/g, '');
+    return (cleanQuery.length >= 4 && aPhoneClean.includes(cleanQuery)) || a.patientName.toLowerCase().includes(lowerQuery);
+  });
+
+  matchedAppointments.sort((a, b) => {
+    const da = `${a.date}T${a.time}`;
+    const dbTime = `${b.date}T${b.time}`;
+    return dbTime.localeCompare(da);
+  });
+
+  const totalPresencas = matchedAppointments.filter(a => a.status === 'concluido' || a.attendanceStatus === 'presenca').length;
+  const totalFaltas = matchedAppointments.filter(a => a.status === 'falta' || a.attendanceStatus === 'falta').length;
+  const totalAgendados = matchedAppointments.filter(a => a.status === 'agendado').length;
+
+  res.json({
+    found: matchedAppointments.length > 0 || !!patient,
+    patient: patient || (matchedAppointments[0] ? {
+      id: `pat-auto`,
+      name: matchedAppointments[0].patientName,
+      phone: matchedAppointments[0].patientPhone,
+      totalSessions: totalPresencas,
+      totalFaltas: totalFaltas,
+      createdAt: matchedAppointments[matchedAppointments.length - 1]?.date || new Date().toISOString()
+    } : null),
+    stats: {
+      totalPresencas,
+      totalFaltas,
+      totalAgendados,
+      totalGeral: matchedAppointments.length
+    },
+    history: matchedAppointments
+  });
 });
 
 app.delete('/api/appointments/:id', (req, res) => {

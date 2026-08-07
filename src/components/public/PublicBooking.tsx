@@ -8,6 +8,7 @@ import { ClinicMascot } from './ClinicMascot';
 import { LoyaltyProgramSection } from './LoyaltyProgramSection';
 import { TestimonialsSection } from './TestimonialsSection';
 import { DownloadAppQRSection } from './DownloadAppQRSection';
+import { PatientSessionsLookup } from './PatientSessionsLookup';
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -43,6 +44,7 @@ interface PublicBookingProps {
 }
 
 export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, onBookingSuccess }) => {
+  const [activePublicTab, setActivePublicTab] = useState<'agendar' | 'minhas_sessoes'>('agendar');
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   // Form State
@@ -369,26 +371,119 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
           </div>
         </div>
 
-        {/* Step Progress Bar */}
-        {step < 4 && (
-          <div className="bg-white rounded-xl p-3 sm:p-4 shadow-2xs border border-[#C9D8CB] mb-6">
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
-              <span className={step >= 1 ? "text-[#5F6D33] font-bold" : ""}>1. Serviço</span>
-              <span className={step >= 2 ? "text-[#5F6D33] font-bold" : ""}>2. Data & Horário</span>
-              <span className={step >= 3 ? "text-[#5F6D33] font-bold" : ""}>3. Seus Dados</span>
+        {/* PROMINENT RECURRING CARD ANNOUNCEMENT BANNER */}
+        <div className="bg-gradient-to-r from-[#23372B] via-[#31523D] to-[#1E3326] p-4 sm:p-5 rounded-2xl border-2 border-[#D0A73B] text-white shadow-md mb-6 relative overflow-hidden">
+          <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-[#D0A73B]/10 rounded-full blur-2xl pointer-events-none" />
+          
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-10">
+            <div className="flex items-start space-x-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-[#D0A73B] text-[#23372B] flex items-center justify-center shrink-0 shadow-sm font-black border border-white/20">
+                <CreditCard className="w-6 h-6 text-[#23372B]" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#D0A73B] text-[#23372B]">
+                    💳 Destaque de Pagamento
+                  </span>
+                  <span className="text-xs font-black text-[#D0A73B] uppercase tracking-wide">
+                    Pilates & Clube Fidelidade
+                  </span>
+                </div>
+                <h3 className="text-sm sm:text-base font-extrabold text-white mt-1 leading-snug">
+                  Não compromete o limite do seu cartão de crédito!
+                </h3>
+                <p className="text-xs text-slate-200 mt-1 leading-relaxed">
+                  No pagamento via <strong>Cartão Recorrente</strong>, é cobrado mensalmente <strong>apenas o valor da parcela (ex: R$ 99/mês)</strong>. O limite total do seu cartão NÃO é bloqueado, mantendo seu saldo livre para o seu dia a dia!
+                </p>
+              </div>
             </div>
-            <div className="w-full bg-[#E4EBE4] h-2.5 rounded-full overflow-hidden">
-              <div
-                className="bg-gradient-to-r from-[#5F6D33] to-[#D0A73B] h-full transition-all duration-300 ease-out"
-                style={{ width: `${(step / 3) * 100}%` }}
-              />
-            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActivePublicTab('agendar');
+                setStep(1);
+                setTimeout(() => {
+                  const el = document.getElementById('step-1-services-container');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 50);
+              }}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-black bg-[#D0A73B] hover:bg-[#b8912d] text-[#23372B] shadow-sm transition-all shrink-0 flex items-center justify-center space-x-1.5 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Marcar Agendamento</span>
+            </button>
           </div>
-        )}
+        </div>
+
+        {/* Public Navigation Tabs: Agendar vs Consultar Minhas Sessões */}
+        <div className="bg-white rounded-2xl p-2 shadow-2xs border border-[#C9D8CB] mb-6 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setActivePublicTab('agendar');
+              setStep(1);
+              setTimeout(() => {
+                const el = document.getElementById('step-1-services-container');
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+              }, 50);
+            }}
+            className={`py-3 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+              activePublicTab === 'agendar'
+                ? 'bg-[#31523D] text-white shadow-xs'
+                : 'bg-[#F4F7F4] text-slate-700 hover:bg-[#E8EFE9]'
+            }`}
+          >
+            <CalendarIcon className="w-4 h-4 text-[#D0A73B]" />
+            <span>📅 Marcar Consulta</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActivePublicTab('minhas_sessoes')}
+            className={`py-3 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+              activePublicTab === 'minhas_sessoes'
+                ? 'bg-[#31523D] text-white shadow-xs'
+                : 'bg-[#F4F7F4] text-slate-700 hover:bg-[#E8EFE9]'
+            }`}
+          >
+            <CheckCircle2 className="w-4 h-4 text-[#D0A73B]" />
+            <span>📋 Área do Paciente • Sessões</span>
+          </button>
+        </div>
+
+        {activePublicTab === 'minhas_sessoes' ? (
+          <PatientSessionsLookup
+            clinicName={clinic.name}
+            onClose={() => {
+              setActivePublicTab('agendar');
+              setStep(1);
+            }}
+          />
+        ) : (
+          <>
+            {/* Step Progress Bar */}
+            {step < 4 && (
+              <div className="bg-white rounded-xl p-3 sm:p-4 shadow-2xs border border-[#C9D8CB] mb-6">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
+                  <span className={step >= 1 ? "text-[#5F6D33] font-bold" : ""}>1. Serviço</span>
+                  <span className={step >= 2 ? "text-[#5F6D33] font-bold" : ""}>2. Data & Horário</span>
+                  <span className={step >= 3 ? "text-[#5F6D33] font-bold" : ""}>3. Seus Dados</span>
+                </div>
+                <div className="w-full bg-[#E4EBE4] h-2.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-[#5F6D33] to-[#D0A73B] h-full transition-all duration-300 ease-out"
+                    style={{ width: `${(step / 3) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
         {/* STEP 1: SERVICE SELECTION */}
         {step === 1 && (
-          <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-[#C9D8CB]">
+          <div id="step-1-services-container" className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-[#C9D8CB]">
             {/* Logo and Step Title Header */}
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#E4EBE4]">
               <div className="flex items-center space-x-3">
@@ -422,7 +517,18 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
 
             {/* Exclusive Clinic Mascot - Lys */}
             <div className="mb-6">
-              <ClinicMascot />
+              <ClinicMascot
+                onBookClick={() => {
+                  setActivePublicTab('agendar');
+                  setStep(1);
+                  setTimeout(() => {
+                    const el = document.getElementById('step-1-services-container');
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                  }, 50);
+                }}
+              />
             </div>
 
             {/* Programa de Fidelidade Recorrente R$ 99/mês (Abaixo das Dicas da Lys) */}
@@ -474,6 +580,21 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Notice / Observation Banner requested by user */}
+            <div id="services-list-start" className="bg-[#F4F7F4] border-2 border-[#5F6D33] p-4 rounded-2xl flex items-center space-x-3 text-slate-800 shadow-2xs mb-5">
+              <div className="w-10 h-10 rounded-xl bg-[#31523D] text-[#D0A73B] flex items-center justify-center shrink-0 font-black text-lg shadow-2xs">
+                📌
+              </div>
+              <div>
+                <span className="text-xs font-extrabold uppercase tracking-wider text-[#31523D] block">
+                  Observação Importante:
+                </span>
+                <p className="text-xs sm:text-sm font-bold text-[#23372B] mt-0.5">
+                  Para realizar o agendamento, selecione o serviço abaixo.
+                </p>
               </div>
             </div>
 
@@ -1026,7 +1147,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
                   Forma de Pagamento *
                 </label>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                   {/* Option 1: PIX */}
                   <div
                     onClick={() => setPaymentMethod('pix')}
@@ -1052,7 +1173,35 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
                     </div>
                   </div>
 
-                  {/* Option 2: Link de Cartão */}
+                  {/* Option 2: Cartão Recorrente (Sem comprometer limite) */}
+                  <div
+                    onClick={() => setPaymentMethod('cartao_recorrente')}
+                    className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between relative overflow-hidden ${
+                      paymentMethod === 'cartao_recorrente'
+                        ? 'bg-[#F5EED3] border-[#D0A73B] shadow-sm ring-2 ring-[#D0A73B]/60'
+                        : 'bg-[#FDFBF5] border-[#D0A73B]/50 hover:border-[#D0A73B]'
+                    }`}
+                  >
+                    <span className="absolute top-0 right-0 bg-[#31523D] text-[#D0A73B] text-[9px] font-black px-2 py-0.5 rounded-bl-lg uppercase tracking-wider">
+                      Não compromete o limite!
+                    </span>
+                    <div className="flex items-center justify-between mb-2 mt-1">
+                      <span className="p-1.5 rounded-lg bg-[#31523D] text-[#D0A73B]">
+                        <CreditCard className="w-4 h-4" />
+                      </span>
+                      <span className={`w-4 h-4 rounded-full border flex items-center justify-center text-[10px] font-bold ${
+                        paymentMethod === 'cartao_recorrente' ? 'bg-[#31523D] text-[#D0A73B] border-[#31523D]' : 'border-slate-300'
+                      }`}>
+                        {paymentMethod === 'cartao_recorrente' && '✓'}
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-extrabold text-[#23372B]">Cartão Recorrente</h4>
+                      <p className="text-[10px] text-amber-800 font-bold mt-0.5">Desconta só 1 parcela por mês!</p>
+                    </div>
+                  </div>
+
+                  {/* Option 3: Link de Cartão */}
                   <div
                     onClick={() => setPaymentMethod('card_link')}
                     className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
@@ -1077,7 +1226,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
                     </div>
                   </div>
 
-                  {/* Option 3: Presencial */}
+                  {/* Option 4: Presencial */}
                   <div
                     onClick={() => setPaymentMethod('presencial')}
                     className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
@@ -1125,11 +1274,16 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
                   </div>
                 )}
 
-                {paymentMethod === 'card_link' && (
-                  <div className="mt-3 p-3.5 bg-[#F4F7F4] rounded-xl border border-[#C9D8CB]">
-                    <span className="text-[11px] font-bold text-[#31523D] uppercase tracking-wide block">Pagamento com Cartão via Link Seguro:</span>
-                    <p className="text-xs text-slate-600 mt-0.5">
-                      Você pode pagar no cartão de crédito/débito online. O link seguro do Mercado Pago será gerado e enviado também no seu WhatsApp ao finalizar.
+                {paymentMethod === 'cartao_recorrente' && (
+                  <div className="mt-3 p-4 bg-gradient-to-r from-[#F5EED3] via-white to-[#EAF0DB] rounded-xl border-2 border-[#D0A73B] shadow-2xs space-y-1.5">
+                    <div className="flex items-center space-x-2 text-[#31523D]">
+                      <CreditCard className="w-4 h-4 text-[#D0A73B]" />
+                      <span className="text-xs font-black uppercase tracking-wide">
+                        Vantagem Exclusiva: Não compromete o limite do seu cartão!
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#23372B] font-semibold leading-relaxed">
+                      No <strong>Cartão Recorrente</strong>, é debitado na sua fatura <strong>apenas o valor de uma mensalidade por mês</strong>. O limite total do seu cartão NÃO é bloqueado ou comprometido, garantindo total liberdade e sem surpresas!
                     </p>
                   </div>
                 )}
@@ -1324,6 +1478,8 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
             </div>
 
           </div>
+        )}
+        </>
         )}
 
         {/* App Download QR Code Section */}

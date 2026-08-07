@@ -248,8 +248,8 @@ export const LoyaltyProgramSection: React.FC<LoyaltyProgramSectionProps> = ({ cl
             100% do seu valor mensal é convertido em <strong className="text-white">crédito acumulativo</strong> para realizar sessões de Pilates, Fisioterapia, Massoterapia e avaliações.
           </p>
 
-          {/* 3 Main Benefits Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+          {/* 4 Main Benefits Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
             {/* Benefit 1 */}
             <div className="bg-white/10 backdrop-blur-md border border-white/15 p-4 rounded-2xl space-y-1.5">
               <div className="flex items-center space-x-2 text-[#D0A73B]">
@@ -261,7 +261,18 @@ export const LoyaltyProgramSection: React.FC<LoyaltyProgramSectionProps> = ({ cl
               </p>
             </div>
 
-            {/* Benefit 2 */}
+            {/* Benefit 2: Pagamento Recorrente Sem Compromete Limite */}
+            <div className="bg-[#D0A73B]/20 backdrop-blur-md border border-[#D0A73B]/50 p-4 rounded-2xl space-y-1.5">
+              <div className="flex items-center space-x-2 text-[#D0A73B]">
+                <Sparkles className="w-5 h-5 text-[#D0A73B]" />
+                <h4 className="text-xs font-extrabold text-white uppercase tracking-wider">Cartão Recorrente</h4>
+              </div>
+              <p className="text-[11px] text-amber-100 font-medium leading-snug">
+                É descontado mensalmente apenas <strong>R$ 99 por mês</strong>. Não compromete o limite do seu cartão de crédito!
+              </p>
+            </div>
+
+            {/* Benefit 3 */}
             <div className="bg-white/10 backdrop-blur-md border border-white/15 p-4 rounded-2xl space-y-1.5">
               <div className="flex items-center space-x-2 text-[#D0A73B]">
                 <Users className="w-5 h-5" />
@@ -272,7 +283,7 @@ export const LoyaltyProgramSection: React.FC<LoyaltyProgramSectionProps> = ({ cl
               </p>
             </div>
 
-            {/* Benefit 3 */}
+            {/* Benefit 4 */}
             <div className="bg-white/10 backdrop-blur-md border border-white/15 p-4 rounded-2xl space-y-1.5">
               <div className="flex items-center space-x-2 text-[#D0A73B]">
                 <HeartHandshake className="w-5 h-5" />

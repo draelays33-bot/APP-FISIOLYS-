@@ -27,9 +27,9 @@ export interface ScheduleConfig {
   advanceDaysMax: number;     // e.g. 30 dias para frente
 }
 
-export type AppointmentStatus = 'agendado' | 'concluido' | 'cancelado';
+export type AppointmentStatus = 'agendado' | 'concluido' | 'falta' | 'cancelado';
 
-export type PaymentMethod = 'pix' | 'card_link' | 'presencial';
+export type PaymentMethod = 'pix' | 'card_link' | 'presencial' | 'cartao_recorrente';
 
 export interface Appointment {
   id: string;
@@ -43,6 +43,8 @@ export interface Appointment {
   date: string; // YYYY-MM-DD
   time: string; // HH:MM
   status: AppointmentStatus;
+  attendanceStatus?: 'presenca' | 'falta' | 'pendente';
+  attendanceNotes?: string;
   paymentMethod?: PaymentMethod;
   notes?: string;
   createdAt: string;
@@ -85,6 +87,7 @@ export interface Patient {
   firstSessionDate?: string;
   lastSessionDate?: string;
   totalSessions: number;
+  totalFaltas?: number;
   notes?: string;
   createdAt: string;
 }
@@ -105,7 +108,7 @@ export interface ClinicConfig {
 }
 
 export type AppView = 'public' | 'admin';
-export type AdminTab = 'dashboard' | 'agenda' | 'servicos' | 'horarios' | 'pacientes' | 'fidelidade' | 'qrcode' | 'webhook';
+export type AdminTab = 'dashboard' | 'agenda' | 'servicos' | 'horarios' | 'pacientes' | 'fidelidade' | 'financeiro' | 'qrcode' | 'webhook';
 
 export type LoyaltyStatus = 'ativo' | 'inativo' | 'inadimplente';
 

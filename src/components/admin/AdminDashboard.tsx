@@ -6,11 +6,13 @@ import { AdminServices } from './AdminServices';
 import { AdminSchedule } from './AdminSchedule';
 import { AdminPatients } from './AdminPatients';
 import { AdminLoyalty } from './AdminLoyalty';
+import { AdminFinancial } from './AdminFinancial';
 import { AdminQRCode } from './AdminQRCode';
 import { AdminWebhook } from './AdminWebhook';
 import {
   LayoutDashboard,
   Calendar as CalendarIcon,
+  Calendar,
   Briefcase,
   Clock,
   Users,
@@ -28,7 +30,13 @@ import {
   DollarSign,
   UserCheck,
   ChevronRight,
+  ChevronLeft,
+  Grid,
+  List,
+  MessageSquare,
   Phone,
+  Lock,
+  ShieldCheck,
   X
 } from 'lucide-react';
 
@@ -52,6 +60,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [statusFilter, setStatusFilter] = useState<string>('todos');
+  const [agendaViewMode, setAgendaViewMode] = useState<'grid' | 'list'>('grid');
+  const [searchPatientQuery, setSearchPatientQuery] = useState<string>('');
+
+  // Financial password protection
+  const [financialPasswordUnlocked, setFinancialPasswordUnlocked] = useState<boolean>(false);
+  const [financialPasswordInput, setFinancialPasswordInput] = useState<string>('');
+  const [financialPasswordError, setFinancialPasswordError] = useState<string>('');
+
+  // Shift date helper
+  const shiftSelectedDate = (daysDelta: number) => {
+    const current = new Date(selectedDate + 'T12:00:00');
+    current.setDate(current.getDate() + daysDelta);
+    setSelectedDate(current.toISOString().split('T')[0]);
+  };
+
+  const handleSetToday = () => {
+    setSelectedDate(new Date().toISOString().split('T')[0]);
+  };
+
+  // WhatsApp Reminder Sender
+  const sendWhatsAppReminder = (app: Appointment) => {
+    const cleanPhone = app.patientPhone.replace(/\D/g, '');
+    const phoneToUse = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+    const message = `Olá *${app.patientName}*! Tudo bem?\n\nPassando para confirmar seu agendamento de *${app.serviceName}* na Clínica Dra. Elays Marinho:\n\n📅 *Data:* ${formatDatePtBR(app.date)}\n⏰ *Horário:* ${app.time}hs\n\nPodemos confirmar sua presença? Se precisar reagendar, avise-nos! 😊✨`;
+    window.open(`https://api.whatsapp.com/send?phone=${phoneToUse}&text=${encodeURIComponent(message)}`, '_blank');
+  };
 
   // Manual New Appointment Modal State
   const [isManualApptOpen, setIsManualApptOpen] = useState(false);
@@ -63,6 +97,66 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [manualNotes, setManualNotes] = useState('');
   const [manualLoading, setManualLoading] = useState(false);
   const [manualError, setManualError] = useState('');
+
+  // Helper to open manual booking modal prefilled with slot date & time
+  const handleOpenSlotBooking = (dateStr: string, timeStr: string) => {
+    setManualDate(dateStr);
+    setManualTime(timeStr);
+    if (services.length > 0 && !manualServiceId) {
+      setManualServiceId(services[0].id);
+    }
+    setIsManualApptOpen(true);
+  };
+
+  // Generate slots for selectedDate
+  const dayTimeSlots = React.useMemo(() => {
+    const dateObj = new Date(selectedDate + 'T12:00:00');
+    const dayIndex = dateObj.getDay();
+    const dayConfig = schedule.days?.find((d) => d.dayOfWeek === dayIndex);
+
+    let startTime = '07:00';
+    let endTime = '19:00';
+    let lunchStart = '12:00';
+    let lunchEnd = '13:00';
+    const step = schedule.slotIntervalMinutes || 60;
+
+    if (dayConfig) {
+      if (dayConfig.startTime) startTime = dayConfig.startTime;
+      if (dayConfig.endTime) endTime = dayConfig.endTime;
+      if (dayConfig.lunchStart) lunchStart = dayConfig.lunchStart;
+      if (dayConfig.lunchEnd) lunchEnd = dayConfig.lunchEnd;
+    }
+
+    const [sH, sM] = startTime.split(':').map(Number);
+    const [eH, eM] = endTime.split(':').map(Number);
+    const startMins = sH * 60 + sM;
+    const endMins = eH * 60 + eM;
+
+    const slotsSet = new Set<string>();
+
+    for (let m = startMins; m < endMins; m += step) {
+      const hh = String(Math.floor(m / 60)).padStart(2, '0');
+      const mm = String(m % 60).padStart(2, '0');
+      const slotStr = `${hh}:${mm}`;
+
+      if (lunchStart && lunchEnd) {
+        const [lsh, lsm] = lunchStart.split(':').map(Number);
+        const [leh, lem] = lunchEnd.split(':').map(Number);
+        const lStartM = lsh * 60 + lsm;
+        const lEndM = leh * 60 + lem;
+        if (m >= lStartM && m < lEndM) continue;
+      }
+
+      slotsSet.add(slotStr);
+    }
+
+    // Include existing appointments' times for selectedDate if not present
+    appointments
+      .filter((a) => a.date === selectedDate && a.status !== 'cancelado')
+      .forEach((a) => slotsSet.add(a.time));
+
+    return Array.from(slotsSet).sort();
+  }, [selectedDate, schedule, appointments]);
 
   // Key Metric Calculations
   const todayStr = new Date().toISOString().split('T')[0];
@@ -117,7 +211,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const filteredAppointments = appointments.filter((a) => {
     const matchDate = selectedDate ? a.date === selectedDate : true;
     const matchStatus = statusFilter !== 'todos' ? a.status === statusFilter : true;
-    return matchDate && matchStatus;
+    const matchSearch = searchPatientQuery
+      ? a.patientName.toLowerCase().includes(searchPatientQuery.toLowerCase()) ||
+        a.patientPhone.includes(searchPatientQuery) ||
+        a.serviceName.toLowerCase().includes(searchPatientQuery.toLowerCase())
+      : true;
+    return matchDate && matchStatus && matchSearch;
   });
 
   return (
@@ -202,6 +301,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <Crown className="w-4 h-4 text-[#D0A73B]" />
             <span>Fidelidade R$ 99</span>
+          </button>
+
+          <button
+            id="tab-financeiro"
+            onClick={() => setActiveTab('financeiro')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+              activeTab === 'financeiro'
+                ? 'bg-[#31523D] text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
+            }`}
+          >
+            <DollarSign className="w-4 h-4 text-[#D0A73B]" />
+            <span>Gestão Financeira</span>
+            {!financialPasswordUnlocked && <Lock className="w-3 h-3 text-[#D0A73B] shrink-0" />}
           </button>
 
           <button
@@ -325,21 +438,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                         <div className="flex items-center space-x-2 shrink-0">
                           {app.status === 'concluido' ? (
-                            <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                              ✓ Concluído
+                            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 flex items-center space-x-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>✅ Presença</span>
+                            </span>
+                          ) : app.status === 'falta' ? (
+                            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 flex items-center space-x-1">
+                              <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                              <span>❌ Falta</span>
                             </span>
                           ) : (
                             <>
                               <button
                                 onClick={() => handleUpdateStatus(app.id, 'concluido')}
-                                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs flex items-center space-x-1"
+                                className="px-3 py-1.5 rounded-lg text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs flex items-center space-x-1 cursor-pointer"
+                                title="Dar presença para esta paciente"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>Concluir</span>
+                                <span>Presença</span>
+                              </button>
+                              <button
+                                onClick={() => handleUpdateStatus(app.id, 'falta')}
+                                className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-100 hover:bg-rose-200 text-rose-800 flex items-center space-x-1 cursor-pointer"
+                                title="Registrar falta para esta paciente"
+                              >
+                                <XCircle className="w-3.5 h-3.5" />
+                                <span>Falta</span>
                               </button>
                               <button
                                 onClick={() => handleUpdateStatus(app.id, 'cancelado')}
-                                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50"
+                                className="px-2 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100"
                               >
                                 Cancelar
                               </button>
@@ -380,124 +508,416 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         )}
 
-        {/* TAB 2: FULL AGENDA / CALENDAR */}
+        {/* TAB 2: FULL VERSATILE AGENDA */}
         {activeTab === 'agenda' && (
           <div className="space-y-6">
             
-            {/* Filter Bar */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
-                    Filtrar por Data
-                  </label>
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-medium text-slate-800"
-                  />
+            {/* Top Toolbar: Date Navigation, Search, View Modes & New Appointment */}
+            <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-2xs space-y-4">
+              
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                
+                {/* Date Controls */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => shiftSelectedDate(-1)}
+                      className="p-1.5 rounded-xl hover:bg-white text-slate-700 font-bold transition-all cursor-pointer"
+                      title="Dia anterior"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={handleSetToday}
+                      className="px-3 py-1 rounded-xl bg-white text-slate-800 text-xs font-black shadow-2xs hover:bg-slate-50 transition-all cursor-pointer"
+                    >
+                      Hoje
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => shiftSelectedDate(1)}
+                      className="p-1.5 rounded-xl hover:bg-white text-slate-700 font-bold transition-all cursor-pointer"
+                      title="Próximo dia"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="px-3 py-1.5 rounded-2xl border border-slate-300 text-xs font-extrabold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#31523D]"
+                    />
+                  </div>
+
+                  <span className="text-xs font-black text-[#31523D] bg-[#EAF0DB] px-3 py-1.5 rounded-2xl border border-[#C9D8CB]">
+                    🗓️ {formatDatePtBR(selectedDate)}
+                  </span>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
-                    Status do Agendamento
-                  </label>
+                {/* View Switcher & Actions */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* View Mode Toggle */}
+                  <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setAgendaViewMode('grid')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                        agendaViewMode === 'grid'
+                          ? 'bg-[#31523D] text-white shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Grid className="w-3.5 h-3.5" />
+                      <span>Grade de Horários & Vagas</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAgendaViewMode('list')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                        agendaViewMode === 'list'
+                          ? 'bg-[#31523D] text-white shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <List className="w-3.5 h-3.5" />
+                      <span>Lista de Pacientes</span>
+                    </button>
+                  </div>
+
+                  {/* Manual Appointment Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualDate(selectedDate);
+                      setIsManualApptOpen(true);
+                    }}
+                    className="px-4 py-2 rounded-2xl font-black text-xs bg-[#31523D] hover:bg-[#23372B] text-white shadow-xs flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 text-[#D0A73B]" />
+                    <span>+ Novo Encaixe / Agendamento</span>
+                  </button>
+                </div>
+
+              </div>
+
+              {/* Second Row: Search & Filters */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2 flex-1">
+                  <div className="relative flex-1 max-w-xs">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={searchPatientQuery}
+                      onChange={(e) => setSearchPatientQuery(e.target.value)}
+                      placeholder="Buscar por paciente, telefone ou serviço..."
+                      className="pl-8 pr-3 py-1.5 rounded-xl border border-slate-300 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#31523D] w-full"
+                    />
+                  </div>
+
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-medium text-slate-800"
+                    className="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 bg-slate-50 focus:outline-none"
                   >
                     <option value="todos">Todos os Status</option>
-                    <option value="agendado">Agendados</option>
-                    <option value="concluido">Concluídos</option>
-                    <option value="cancelado">Cancelados</option>
+                    <option value="agendado">🟡 Agendados (Pendentes)</option>
+                    <option value="concluido">✅ Presenças Concluídas</option>
+                    <option value="falta">❌ Faltas Registradas</option>
+                    <option value="cancelado">🚫 Cancelados</option>
                   </select>
                 </div>
+
+                {/* Day Summary Stats Bar */}
+                {(() => {
+                  const dayApps = appointments.filter((a) => a.date === selectedDate && a.status !== 'cancelado');
+                  const dayDone = dayApps.filter((a) => a.status === 'concluido').length;
+                  const dayPending = dayApps.filter((a) => a.status === 'agendado').length;
+                  const occupiedTimes = new Set(dayApps.map((a) => a.time));
+                  const freeCount = Math.max(0, dayTimeSlots.length - occupiedTimes.size);
+
+                  return (
+                    <div className="flex flex-wrap items-center gap-2 text-xs shrink-0">
+                      <span className="px-2.5 py-1 rounded-xl bg-slate-100 font-bold text-slate-700">
+                        Total: <strong>{dayApps.length}</strong>
+                      </span>
+                      <span className="px-2.5 py-1 rounded-xl bg-emerald-100 text-emerald-800 font-bold">
+                        Presenças: <strong>{dayDone}</strong>
+                      </span>
+                      <span className="px-2.5 py-1 rounded-xl bg-amber-100 text-amber-900 font-bold">
+                        Pendentes: <strong>{dayPending}</strong>
+                      </span>
+                      <span className="px-2.5 py-1 rounded-xl bg-[#EAF0DB] text-[#31523D] font-black border border-[#C9D8CB]">
+                        Vagas Livres: <strong>{freeCount}</strong>
+                      </span>
+                    </div>
+                  );
+                })()}
+
               </div>
 
-              <button
-                onClick={() => setIsManualApptOpen(true)}
-                className="px-4 py-2.5 rounded-xl font-bold text-xs bg-teal-700 hover:bg-teal-800 text-white shadow-xs flex items-center justify-center space-x-1.5"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Novo Agendamento Manual</span>
-              </button>
             </div>
 
-            {/* Agenda Table */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
-              {filteredAppointments.length === 0 ? (
-                <div className="py-12 text-center text-slate-500 text-xs sm:text-sm">
-                  Nenhum agendamento localizado para o filtro selecionado.
+            {/* VIEW MODE 1: GRID VIEW (GRADE DE HORÁRIOS & VAGAS LIVRES) */}
+            {agendaViewMode === 'grid' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs font-extrabold text-slate-500 uppercase tracking-wider px-1">
+                  <span>Grade Temporal de Horários — {formatDatePtBR(selectedDate)}</span>
+                  <span>Clique em "Agendar Encaixe" para preencher vagas</span>
                 </div>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {filteredAppointments.map((app) => (
-                    <div
-                      key={app.id}
-                      className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/60 transition-all"
-                    >
-                      <div className="flex items-start space-x-3">
-                        <div className="text-center shrink-0">
-                          <span className="block text-[10px] uppercase font-bold text-slate-400">
-                            {formatDatePtBR(app.date)}
+
+                <div className="grid grid-cols-1 gap-3">
+                  {dayTimeSlots.map((slotTime) => {
+                    const slotAppts = filteredAppointments.filter((a) => a.time === slotTime);
+
+                    if (slotAppts.length === 0) {
+                      // FREE SLOT CARD
+                      return (
+                        <div
+                          key={`slot_${slotTime}`}
+                          className="p-3.5 sm:p-4 rounded-2xl bg-emerald-50/40 border border-emerald-200/80 hover:border-emerald-400 transition-all flex items-center justify-between gap-3 group"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <span className="px-3 py-1.5 rounded-xl font-mono font-black text-xs bg-emerald-700 text-white shadow-2xs shrink-0 flex items-center space-x-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>{slotTime} hs</span>
+                            </span>
+                            <div>
+                              <span className="text-xs font-bold text-emerald-900 flex items-center space-x-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <span>Horário Livre / Vaga Disponível</span>
+                              </span>
+                              <p className="text-[11px] text-emerald-700 mt-0.5">
+                                Pronto para receber agendamento público ou encaixe direto
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSlotBooking(selectedDate, slotTime)}
+                            className="px-3.5 py-2 rounded-xl text-xs font-black bg-emerald-700 hover:bg-emerald-800 text-white shadow-2xs flex items-center space-x-1 transition-all cursor-pointer group-hover:scale-102 shrink-0"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Agendar Encaixe ({slotTime})</span>
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    // OCCUPIED SLOT CARD(S)
+                    return (
+                      <div
+                        key={`slot_${slotTime}`}
+                        className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all space-y-3"
+                      >
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                          <span className="px-3 py-1 rounded-xl font-mono font-black text-xs bg-[#31523D] text-[#D0A73B] shadow-2xs flex items-center space-x-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>{slotTime} hs</span>
                           </span>
-                          <span className="px-2.5 py-1 rounded-md font-mono font-extrabold text-xs bg-teal-100 text-teal-800 inline-block mt-0.5">
-                            {app.time} hs
+                          <span className="text-[11px] font-bold text-slate-400">
+                            {slotAppts.length} Paciente{slotAppts.length > 1 ? 's' : ''} neste horário
                           </span>
                         </div>
 
-                        <div>
-                          <h4 className="text-sm font-bold text-slate-800">{app.patientName}</h4>
-                          <p className="text-xs text-slate-600 mt-0.5">
-                            <strong className="text-teal-800">{app.serviceName}</strong> • {formatCurrency(app.servicePrice)}
-                          </p>
-                          <p className="text-xs text-slate-500 flex items-center space-x-1 mt-0.5">
-                            <Phone className="w-3 h-3 text-slate-400" />
-                            <span>{app.patientPhone}</span>
-                          </p>
-                          {app.notes && (
-                            <p className="text-[11px] text-slate-500 italic mt-1 bg-slate-100 p-1.5 rounded-md inline-block">
-                              Obs: {app.notes}
+                        <div className="divide-y divide-slate-100">
+                          {slotAppts.map((app) => (
+                            <div key={app.id} className="pt-2 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div>
+                                <div className="flex items-center space-x-2">
+                                  <h4 className="text-sm font-extrabold text-slate-800">{app.patientName}</h4>
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                    app.status === 'concluido'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : app.status === 'falta'
+                                      ? 'bg-rose-100 text-rose-800'
+                                      : app.status === 'cancelado'
+                                      ? 'bg-slate-100 text-slate-600'
+                                      : 'bg-amber-100 text-amber-900'
+                                  }`}>
+                                    {app.status === 'concluido' && '✅ Presença'}
+                                    {app.status === 'falta' && '❌ Falta'}
+                                    {app.status === 'cancelado' && '🚫 Cancelado'}
+                                    {app.status === 'agendado' && '🟡 Pendente'}
+                                  </span>
+                                </div>
+
+                                <p className="text-xs text-slate-600 mt-0.5">
+                                  <strong className="text-[#31523D]">{app.serviceName}</strong> • {formatCurrency(app.servicePrice)}
+                                </p>
+
+                                <p className="text-xs text-slate-500 flex items-center space-x-2 mt-0.5">
+                                  <span className="flex items-center space-x-1">
+                                    <Phone className="w-3 h-3 text-slate-400" />
+                                    <span>{app.patientPhone}</span>
+                                  </span>
+                                  {app.notes && (
+                                    <span>• Obs: <em className="text-slate-700">{app.notes}</em></span>
+                                  )}
+                                </p>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div className="flex flex-wrap items-center gap-1.5 justify-end">
+                                {/* Send WhatsApp Reminder Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => sendWhatsAppReminder(app)}
+                                  className="px-2.5 py-1.5 rounded-xl text-xs font-extrabold bg-[#25D366] hover:bg-[#1EBE5D] text-white shadow-2xs flex items-center space-x-1 cursor-pointer"
+                                  title="Enviar mensagem de confirmação/lembrete no WhatsApp"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                  <span>Lembrete</span>
+                                </button>
+
+                                {app.status === 'agendado' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateStatus(app.id, 'concluido')}
+                                      className="px-2.5 py-1.5 rounded-xl text-xs font-extrabold bg-emerald-700 text-white hover:bg-emerald-800 flex items-center space-x-1 cursor-pointer"
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      <span>Presença</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateStatus(app.id, 'falta')}
+                                      className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-100 hover:bg-rose-200 text-rose-800 flex items-center space-x-1 cursor-pointer"
+                                    >
+                                      <XCircle className="w-3.5 h-3.5" />
+                                      <span>Falta</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateStatus(app.id, 'cancelado')}
+                                      className="px-2 py-1.5 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100"
+                                    >
+                                      Cancelar
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* VIEW MODE 2: LIST VIEW */}
+            {agendaViewMode === 'list' && (
+              <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs overflow-hidden">
+                {filteredAppointments.length === 0 ? (
+                  <div className="py-12 text-center text-slate-500 text-xs sm:text-sm">
+                    Nenhum agendamento localizado para os filtros selecionados.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {filteredAppointments.map((app) => (
+                      <div
+                        key={app.id}
+                        className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/60 transition-all"
+                      >
+                        <div className="flex items-start space-x-3.5">
+                          <div className="text-center shrink-0">
+                            <span className="block text-[10px] uppercase font-bold text-slate-400">
+                              {formatDatePtBR(app.date)}
+                            </span>
+                            <span className="px-2.5 py-1 rounded-xl font-mono font-black text-xs bg-[#31523D] text-[#D0A73B] inline-block mt-0.5">
+                              {app.time} hs
+                            </span>
+                          </div>
+
+                          <div>
+                            <h4 className="text-sm font-extrabold text-slate-800">{app.patientName}</h4>
+                            <p className="text-xs text-slate-600 mt-0.5">
+                              <strong className="text-[#31523D]">{app.serviceName}</strong> • {formatCurrency(app.servicePrice)}
                             </p>
+                            <p className="text-xs text-slate-500 flex items-center space-x-1 mt-0.5">
+                              <Phone className="w-3 h-3 text-slate-400" />
+                              <span>{app.patientPhone}</span>
+                            </p>
+                            {app.notes && (
+                              <p className="text-[11px] text-slate-500 italic mt-1 bg-slate-100 p-1.5 rounded-md inline-block">
+                                Obs: {app.notes}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => sendWhatsAppReminder(app)}
+                            className="px-2.5 py-1.5 rounded-xl text-xs font-extrabold bg-[#25D366] hover:bg-[#1EBE5D] text-white shadow-2xs flex items-center space-x-1 cursor-pointer"
+                            title="Enviar lembrete de agendamento no WhatsApp"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            <span>WhatsApp</span>
+                          </button>
+
+                          {app.status === 'concluido' ? (
+                            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 flex items-center space-x-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>✅ Presença</span>
+                            </span>
+                          ) : app.status === 'falta' ? (
+                            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 flex items-center space-x-1">
+                              <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                              <span>❌ Falta</span>
+                            </span>
+                          ) : app.status === 'cancelado' ? (
+                            <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">
+                              🚫 Cancelado
+                            </span>
+                          ) : (
+                            <div className="flex items-center space-x-1">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateStatus(app.id, 'concluido')}
+                                className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-emerald-700 text-white hover:bg-emerald-800 flex items-center space-x-1 cursor-pointer"
+                                title="Dar presença para esta paciente"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Presença</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateStatus(app.id, 'falta')}
+                                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-100 text-rose-800 hover:bg-rose-200 flex items-center space-x-1 cursor-pointer"
+                                title="Registrar falta para esta paciente"
+                              >
+                                <XCircle className="w-3.5 h-3.5" />
+                                <span>Falta</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateStatus(app.id, 'cancelado')}
+                                className="px-2 py-1.5 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
-
-                      <div className="flex items-center space-x-2 justify-end">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase ${
-                          app.status === 'concluido'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : app.status === 'agendado'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {app.status}
-                        </span>
-
-                        {app.status === 'agendado' && (
-                          <div className="flex items-center space-x-1">
-                            <button
-                              onClick={() => handleUpdateStatus(app.id, 'concluido')}
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700"
-                            >
-                              Concluir
-                            </button>
-                            <button
-                              onClick={() => handleUpdateStatus(app.id, 'cancelado')}
-                              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
           </div>
         )}
@@ -514,12 +934,91 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {/* TAB 5: PATIENTS */}
         {activeTab === 'pacientes' && (
-          <AdminPatients patients={patients} appointments={appointments} />
+          <AdminPatients patients={patients} appointments={appointments} onReload={onReload} />
         )}
 
         {/* TAB 5.5: FIDELIDADE RECORRENTE R$ 99 */}
         {activeTab === 'fidelidade' && (
           <AdminLoyalty clinicPhone={clinic.whatsapp} />
+        )}
+
+        {/* TAB 5.8: GESTÃO FINANCEIRA & COBRANÇA (RESTRICTED WITH PASSWORD 011809) */}
+        {activeTab === 'financeiro' && (
+          !financialPasswordUnlocked ? (
+            <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md mx-auto my-8 border border-slate-200/90 shadow-sm text-center space-y-5 animate-fadeIn">
+              <div className="w-16 h-16 rounded-2xl bg-[#31523D] text-[#D0A73B] flex items-center justify-center mx-auto shadow-md border border-[#D0A73B]/40">
+                <Lock className="w-8 h-8" />
+              </div>
+
+              <div>
+                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 inline-block mb-2">
+                  🔒 Acesso Restrito ao Administrador
+                </span>
+                <h3 className="text-xl font-serif font-extrabold text-[#23372B]">
+                  Área de Gestão Financeira
+                </h3>
+                <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+                  Esta área contém relatórios e faturamento restrito. Digite a senha do Administrador para acessar.
+                </p>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (financialPasswordInput.trim() === '011809') {
+                    setFinancialPasswordUnlocked(true);
+                    setFinancialPasswordError('');
+                  } else {
+                    setFinancialPasswordError('Senha incorreta! Digite a senha válida de Administrador.');
+                  }
+                }}
+                className="space-y-4 pt-2"
+              >
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase text-slate-500 mb-1">
+                    Digite a Senha do Gestor
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="Sua senha de gestor..."
+                    value={financialPasswordInput}
+                    onChange={(e) => {
+                      setFinancialPasswordInput(e.target.value);
+                      setFinancialPasswordError('');
+                    }}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-center font-mono font-extrabold text-base text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#31523D] bg-slate-50"
+                    autoFocus
+                  />
+                  {financialPasswordError && (
+                    <p className="text-xs font-bold text-rose-600 mt-2 flex items-center justify-center space-x-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{financialPasswordError}</span>
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="submit"
+                    className="w-full py-3 px-4 rounded-2xl bg-[#31523D] hover:bg-[#23372B] text-white font-extrabold text-xs shadow-xs transition-all cursor-pointer flex items-center justify-center space-x-2"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-[#D0A73B]" />
+                    <span>Acessar Gestão Financeira</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('dashboard')}
+                    className="w-full py-2 px-4 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                  >
+                    Voltar ao Painel Geral
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            <AdminFinancial clinic={clinic} appointments={appointments} onReload={onReload} />
+          )
         )}
 
         {/* TAB 6: LINK & QR CODE */}

@@ -114,15 +114,45 @@ export const api = {
     return result;
   },
 
-  async updateAppointmentStatus(id: string, status: AppointmentStatus, notes?: string): Promise<Appointment> {
+  async updateAppointmentStatus(id: string, status: AppointmentStatus, notes?: string, attendanceStatus?: 'presenca' | 'falta' | 'pendente'): Promise<Appointment> {
     const res = await fetch(`/api/appointments/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, notes }),
+      body: JSON.stringify({ status, notes, attendanceStatus }),
     });
     if (!res.ok) throw new Error('Falha ao atualizar agendamento');
     const result = await res.json();
     return result.appointment;
+  },
+
+  async markAttendance(appointmentId: string, status: 'concluido' | 'falta' | 'agendado', attendanceNotes?: string): Promise<Appointment> {
+    const res = await fetch('/api/appointments/mark-attendance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appointmentId, status, attendanceNotes }),
+    });
+    if (!res.ok) throw new Error('Falha ao registrar presença/falta');
+    const result = await res.json();
+    return result.appointment;
+  },
+
+  async getPatientHistory(query: string): Promise<{
+    found: boolean;
+    patient: Patient | null;
+    stats: {
+      totalPresencas: number;
+      totalFaltas: number;
+      totalAgendados: number;
+      totalGeral: number;
+    };
+    history: Appointment[];
+  }> {
+    const res = await fetch(`/api/patient-history?query=${encodeURIComponent(query)}`);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Falha ao buscar histórico do paciente');
+    }
+    return res.json();
   },
 
   async deleteAppointment(id: string): Promise<void> {

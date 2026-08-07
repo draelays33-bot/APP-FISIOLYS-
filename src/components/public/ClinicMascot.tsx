@@ -31,6 +31,17 @@ export const ClinicMascot: React.FC<ClinicMascotProps> = ({ compact = false, onB
 
   const currentTip = HEALTH_TIPS[currentTipIndex];
 
+  const handleBookClick = () => {
+    if (onBookClick) {
+      onBookClick();
+    } else {
+      const el = document.getElementById('services-list-start') || document.getElementById('step-1-services-container');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  };
+
   if (compact) {
     return (
       <div className="bg-gradient-to-r from-[#EAF0DB] via-[#F4F7F4] to-[#F5EED3] rounded-2xl p-4 border border-[#9CB55E]/50 shadow-xs flex items-center space-x-3.5">
@@ -55,12 +66,13 @@ export const ClinicMascot: React.FC<ClinicMascotProps> = ({ compact = false, onB
           </p>
         </div>
         <button
-          onClick={nextTip}
-          className="px-2.5 py-1.5 bg-[#5F6D33] hover:bg-[#31523D] text-white rounded-xl text-[10px] font-bold shrink-0 transition-colors cursor-pointer flex items-center space-x-1"
-          title="Ver outra dica da Lys"
+          type="button"
+          onClick={handleBookClick}
+          className="px-2.5 py-1.5 bg-[#31523D] hover:bg-[#23372B] text-white rounded-xl text-[10px] font-extrabold shrink-0 transition-colors cursor-pointer flex items-center space-x-1"
+          title="Agendar consulta"
         >
-          <Lightbulb className="w-3 h-3 text-amber-200" />
-          <span className="hidden sm:inline">Nova Dica</span>
+          <span>Agendar</span>
+          <ChevronRight className="w-3 h-3 text-[#D0A73B]" />
         </button>
       </div>
     );
@@ -122,16 +134,14 @@ export const ClinicMascot: React.FC<ClinicMascotProps> = ({ compact = false, onB
               </span>
             </div>
 
-            {onBookClick && (
-              <button
-                type="button"
-                onClick={onBookClick}
-                className="bg-[#31523D] hover:bg-[#23372B] text-white font-extrabold px-4 py-2 rounded-xl text-xs transition-all cursor-pointer shadow-xs flex items-center space-x-1.5 ml-auto"
-              >
-                <span>Agendar com a Dra. Elays</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleBookClick}
+              className="bg-[#31523D] hover:bg-[#23372B] text-white font-extrabold px-4 py-2 rounded-xl text-xs transition-all cursor-pointer shadow-xs flex items-center space-x-1.5 ml-auto"
+            >
+              <span>Agendar com a Dra. Elays</span>
+              <ChevronRight className="w-4 h-4 text-[#D0A73B]" />
+            </button>
           </div>
         </div>
       </div>
