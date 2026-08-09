@@ -1,82 +1,100 @@
 import { ClinicConfig, Service, ScheduleConfig, Appointment, Patient, AppointmentStatus, SlotInfo, ReminderLog, Testimonial, LoyaltyMember, PaymentMethod } from '../types';
+import { localDb } from './localDb';
+
+// Helper function to attempt API request, and fallback to localDb if server is offline or on static hosting (like Netlify)
+async function fetchOrFallback<T>(
+  url: string,
+  options: RequestInit | undefined,
+  fallbackFn: () => T | Promise<T>
+): Promise<T> {
+  try {
+    const res = await fetch(url, options);
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
+      return await res.json();
+    }
+  } catch (err) {
+    // Server is unreachable or running on static hosting (e.g., Netlify)
+  }
+  return fallbackFn();
+}
 
 export const api = {
   // Clinic Config
   async getClinic(): Promise<ClinicConfig> {
-    const res = await fetch('/api/clinic');
-    if (!res.ok) throw new Error('Falha ao carregar dados da clínica');
-    return res.json();
+    return fetchOrFallback('/api/clinic', undefined, () => localDb.getClinic());
   },
 
   async updateClinic(data: Partial<ClinicConfig>): Promise<ClinicConfig> {
-    const res = await fetch('/api/clinic', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Falha ao atualizar dados da clínica');
-    const result = await res.json();
-    return result.clinic;
+    return fetchOrFallback(
+      '/api/clinic',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      () => localDb.updateClinic(data)
+    ).then(res => (res as any).clinic || res);
   },
 
   // Services
   async getServices(): Promise<Service[]> {
-    const res = await fetch('/api/services');
-    if (!res.ok) throw new Error('Falha ao obter lista de serviços');
-    return res.json();
+    return fetchOrFallback('/api/services', undefined, () => localDb.getServices());
   },
 
   async createService(data: Omit<Service, 'id'>): Promise<Service> {
-    const res = await fetch('/api/services', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Falha ao cadastrar serviço');
-    const result = await res.json();
-    return result.service;
+    return fetchOrFallback(
+      '/api/services',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      () => localDb.createService(data)
+    ).then(res => (res as any).service || res);
   },
 
   async updateService(id: string, data: Partial<Service>): Promise<Service> {
-    const res = await fetch(`/api/services/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Falha ao atualizar serviço');
-    const result = await res.json();
-    return result.service;
+    return fetchOrFallback(
+      `/api/services/${id}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      () => localDb.updateService(id, data)
+    ).then(res => (res as any).service || res);
   },
 
   async deleteService(id: string): Promise<void> {
-    const res = await fetch(`/api/services/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Falha ao excluir serviço');
+    return fetchOrFallback(
+      `/api/services/${id}`,
+      { method: 'DELETE' },
+      () => localDb.deleteService(id)
+    );
   },
 
   // Schedule Config
   async getScheduleConfig(): Promise<ScheduleConfig> {
-    const res = await fetch('/api/schedule-config');
-    if (!res.ok) throw new Error('Falha ao obter horários de atendimento');
-    return res.json();
+    return fetchOrFallback('/api/schedule-config', undefined, () => localDb.getScheduleConfig());
   },
 
   async updateScheduleConfig(data: Partial<ScheduleConfig>): Promise<ScheduleConfig> {
-    const res = await fetch('/api/schedule-config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Falha ao salvar horários');
-    const result = await res.json();
-    return result.schedule;
+    return fetchOrFallback(
+      '/api/schedule-config',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      () => localDb.updateScheduleConfig(data)
+    ).then(res => (res as any).schedule || res);
   },
 
   // Available Slots
   async getAvailableSlots(date: string, serviceId?: string): Promise<{ date: string; dayName: string; available: boolean; slots: SlotInfo[]; reason?: string }> {
     const url = `/api/available-slots?date=${encodeURIComponent(date)}${serviceId ? `&serviceId=${encodeURIComponent(serviceId)}` : ''}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Falha ao verificar horários disponíveis');
-    return res.json();
+    return fetchOrFallback(url, undefined, () => localDb.getAvailableSlots(date, serviceId));
   },
 
   // Appointments
@@ -87,9 +105,7 @@ export const api = {
     if (status) params.append('status', status);
     if (params.toString()) url += `?${params.toString()}`;
 
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Falha ao carregar agendamentos');
-    return res.json();
+    return fetchOrFallback(url, undefined, () => localDb.getAppointments(date, status));
   },
 
   async createAppointment(data: {
@@ -102,38 +118,39 @@ export const api = {
     notes?: string;
     paymentMethod?: PaymentMethod;
   }): Promise<{ appointment: Appointment; webhookSent: boolean }> {
-    const res = await fetch('/api/appointments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const result = await res.json();
-    if (!res.ok) {
-      throw new Error(result.error || 'Falha ao realizar agendamento');
-    }
-    return result;
+    return fetchOrFallback(
+      '/api/appointments',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      () => localDb.createAppointment(data)
+    );
   },
 
   async updateAppointmentStatus(id: string, status: AppointmentStatus, notes?: string, attendanceStatus?: 'presenca' | 'falta' | 'pendente'): Promise<Appointment> {
-    const res = await fetch(`/api/appointments/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, notes, attendanceStatus }),
-    });
-    if (!res.ok) throw new Error('Falha ao atualizar agendamento');
-    const result = await res.json();
-    return result.appointment;
+    return fetchOrFallback(
+      `/api/appointments/${id}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, notes, attendanceStatus }),
+      },
+      () => localDb.updateAppointmentStatus(id, status, notes, attendanceStatus)
+    ).then(res => (res as any).appointment || res);
   },
 
   async markAttendance(appointmentId: string, status: 'concluido' | 'falta' | 'agendado', attendanceNotes?: string): Promise<Appointment> {
-    const res = await fetch('/api/appointments/mark-attendance', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ appointmentId, status, attendanceNotes }),
-    });
-    if (!res.ok) throw new Error('Falha ao registrar presença/falta');
-    const result = await res.json();
-    return result.appointment;
+    return fetchOrFallback(
+      '/api/appointments/mark-attendance',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId, status, attendanceNotes }),
+      },
+      () => localDb.markAttendance(appointmentId, status, attendanceNotes)
+    ).then(res => (res as any).appointment || res);
   },
 
   async getPatientHistory(query: string): Promise<{
@@ -147,146 +164,163 @@ export const api = {
     };
     history: Appointment[];
   }> {
-    const res = await fetch(`/api/patient-history?query=${encodeURIComponent(query)}`);
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Falha ao buscar histórico do paciente');
-    }
-    return res.json();
+    return fetchOrFallback(
+      `/api/patient-history?query=${encodeURIComponent(query)}`,
+      undefined,
+      () => localDb.getPatientHistory(query)
+    );
   },
 
   async deleteAppointment(id: string): Promise<void> {
-    const res = await fetch(`/api/appointments/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Falha ao remover agendamento');
+    return fetchOrFallback(
+      `/api/appointments/${id}`,
+      { method: 'DELETE' },
+      () => localDb.deleteAppointment(id)
+    );
   },
 
   // Patients
   async getPatients(): Promise<Patient[]> {
-    const res = await fetch('/api/patients');
-    if (!res.ok) throw new Error('Falha ao buscar lista de pacientes');
-    return res.json();
+    return fetchOrFallback('/api/patients', undefined, () => localDb.getPatients());
   },
 
   // Webhook test
   async testWebhook(url?: string): Promise<{ success: boolean; status?: number; error?: string; payloadSent: any }> {
-    const res = await fetch('/api/webhook/test', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    });
-    return res.json();
+    return fetchOrFallback(
+      '/api/webhook/test',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      },
+      async () => {
+        if (!url) return { success: false, error: 'URL do Webhook não fornecida' };
+        try {
+          await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'teste_webhook', timestamp: new Date().toISOString() })
+          });
+          return { success: true, payloadSent: { event: 'teste_webhook' } };
+        } catch (e: any) {
+          return { success: false, error: e.message || 'Falha ao disparar webhook' };
+        }
+      }
+    );
   },
 
   // 4-Hour Reminder Logs
   async getReminderLogs(): Promise<ReminderLog[]> {
-    const res = await fetch('/api/reminder-logs');
-    if (!res.ok) throw new Error('Falha ao obter histórico de lembretes');
-    return res.json();
+    return fetchOrFallback('/api/reminder-logs', undefined, () => localDb.getReminderLogs());
   },
 
   // Testimonials
   async getTestimonials(): Promise<Testimonial[]> {
-    const res = await fetch('/api/testimonials');
-    if (!res.ok) throw new Error('Falha ao buscar depoimentos');
-    return res.json();
+    return fetchOrFallback('/api/testimonials', undefined, () => localDb.getTestimonials());
   },
 
   async addTestimonial(data: { patientName: string; treatmentName?: string; rating: number; comment: string }): Promise<Testimonial> {
-    const res = await fetch('/api/testimonials', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Falha ao enviar depoimento');
-    }
-    const result = await res.json();
-    return result.testimonial;
+    return fetchOrFallback(
+      '/api/testimonials',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      () => localDb.addTestimonial(data)
+    ).then(res => (res as any).testimonial || res);
   },
 
   // Loyalty Program API
   async getLoyaltyMembers(): Promise<LoyaltyMember[]> {
-    const res = await fetch('/api/loyalty');
-    if (!res.ok) throw new Error('Falha ao obter lista do programa de fidelidade');
-    return res.json();
+    return fetchOrFallback('/api/loyalty', undefined, () => localDb.getLoyaltyMembers());
   },
 
   async queryLoyaltyMember(search: string): Promise<LoyaltyMember> {
-    const res = await fetch(`/api/loyalty/query?search=${encodeURIComponent(search)}`);
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || 'Assinante não encontrado');
-    return result;
+    return fetchOrFallback(
+      `/api/loyalty/query?search=${encodeURIComponent(search)}`,
+      undefined,
+      () => localDb.queryLoyaltyMember(search)
+    );
   },
 
   async createLoyaltyMember(data: Partial<LoyaltyMember>): Promise<LoyaltyMember> {
-    const res = await fetch('/api/loyalty', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || 'Falha ao cadastrar assinante');
-    return result.member;
+    return fetchOrFallback(
+      '/api/loyalty',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      () => localDb.createLoyaltyMember(data)
+    ).then(res => (res as any).member || res);
   },
 
   async updateLoyaltyMember(id: string, data: Partial<LoyaltyMember>): Promise<LoyaltyMember> {
-    const res = await fetch(`/api/loyalty/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || 'Falha ao atualizar assinante');
-    return result.member;
+    return fetchOrFallback(
+      `/api/loyalty/${id}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      () => localDb.updateLoyaltyMember(id, data)
+    ).then(res => (res as any).member || res);
   },
 
   async recordLoyaltyPayment(id: string, data: { monthYear?: string; amount?: number; paymentMethod?: string; receiptNotes?: string }): Promise<{ member: LoyaltyMember }> {
-    const res = await fetch(`/api/loyalty/${id}/payment`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || 'Falha ao registrar pagamento');
-    return result;
+    return fetchOrFallback(
+      `/api/loyalty/${id}/payment`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      () => localDb.recordLoyaltyPayment(id, data)
+    );
   },
 
   async setupRecurringCard(id: string, data: { cardHolderName: string; cardNumber: string; cardExpiry: string; cardCvv: string; amount?: number }): Promise<{ member: LoyaltyMember }> {
-    const res = await fetch(`/api/loyalty/${id}/recurring-card`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || 'Falha ao ativar cobrança recorrente no cartão');
-    return result;
+    return fetchOrFallback(
+      `/api/loyalty/${id}/recurring-card`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      () => localDb.setupRecurringCard(id, data)
+    );
   },
 
   async subscribeRecurringCard(data: { patientName: string; patientPhone: string; patientAddress?: string; patientCpf?: string; patientEmail?: string; cardHolderName: string; cardNumber: string; cardExpiry: string; cardCvv: string }): Promise<{ member: LoyaltyMember }> {
-    const res = await fetch('/api/loyalty/subscribe-recurring', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || 'Falha ao processar assinatura recorrente');
-    return result;
+    return fetchOrFallback(
+      '/api/loyalty/subscribe-recurring',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      () => localDb.subscribeRecurringCard(data)
+    );
   },
 
   async useLoyaltyCredit(id: string, data: { amount: number; description?: string }): Promise<{ member: LoyaltyMember }> {
-    const res = await fetch(`/api/loyalty/${id}/use-credit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || 'Falha ao utilizar saldo');
-    return result;
+    return fetchOrFallback(
+      `/api/loyalty/${id}/use-credit`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      () => localDb.useLoyaltyCredit(id, data)
+    );
   },
 
   async deleteLoyaltyMember(id: string): Promise<void> {
-    const res = await fetch(`/api/loyalty/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Falha ao remover assinante');
+    return fetchOrFallback(
+      `/api/loyalty/${id}`,
+      { method: 'DELETE' },
+      () => localDb.deleteLoyaltyMember(id)
+    );
   }
 };

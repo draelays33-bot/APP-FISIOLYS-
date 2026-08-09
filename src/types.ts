@@ -84,6 +84,7 @@ export interface Patient {
   name: string;
   phone: string;
   email?: string;
+  cpf?: string;
   firstSessionDate?: string;
   lastSessionDate?: string;
   totalSessions: number;

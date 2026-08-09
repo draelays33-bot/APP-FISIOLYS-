@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Appointment, Service, ScheduleConfig, ClinicConfig, Patient, AdminTab, AppointmentStatus } from '../../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { Appointment, Service, ScheduleConfig, ClinicConfig, Patient, AdminTab, AppointmentStatus, LoyaltyMember } from '../../types';
 import { api } from '../../services/api';
 import { formatCurrency, formatDatePtBR } from '../../utils/qrUtils';
 import { AdminServices } from './AdminServices';
@@ -9,6 +10,7 @@ import { AdminLoyalty } from './AdminLoyalty';
 import { AdminFinancial } from './AdminFinancial';
 import { AdminQRCode } from './AdminQRCode';
 import { AdminWebhook } from './AdminWebhook';
+import { AdminToasts } from './AdminToasts';
 import {
   LayoutDashboard,
   Calendar as CalendarIcon,
@@ -23,6 +25,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  AlertTriangle,
   RefreshCw,
   Search,
   Filter,
@@ -158,16 +161,81 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return Array.from(slotsSet).sort();
   }, [selectedDate, schedule, appointments]);
 
+  // Fetch loyalty members to compute pending payments accurately
+  const [loyaltyMembers, setLoyaltyMembers] = useState<LoyaltyMember[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    api.getLoyaltyMembers().then((members) => {
+      if (isMounted) setLoyaltyMembers(members || []);
+    }).catch((err) => {
+      console.warn("Could not load loyalty members for metrics cards:", err);
+    });
+    return () => { isMounted = false; };
+  }, []);
+
   // Key Metric Calculations
   const todayStr = new Date().toISOString().split('T')[0];
   const todayAppointments = appointments.filter((a) => a.date === todayStr && a.status !== 'cancelado');
   const completedToday = appointments.filter((a) => a.date === todayStr && a.status === 'concluido');
-  
+  const pendingToday = appointments.filter((a) => a.date === todayStr && (a.status === 'agendado' || a.status === 'confirmado'));
+
+  // Pending Payments Calculation (Appointments + Loyalty Overdue)
+  const pendingAppointments = appointments.filter(
+    (a) => a.status === 'agendado' || (a.status === 'confirmado' && a.attendanceStatus === 'pendente')
+  );
+  const pendingAppointmentsTotal = pendingAppointments.reduce((sum, a) => sum + (a.servicePrice || 0), 0);
+
+  const overdueLoyaltyMembers = loyaltyMembers.filter(
+    (m) => m.status === 'inadimplente' || (m.overdueMonths && m.overdueMonths.length > 0)
+  );
+  const pendingLoyaltyTotal = overdueLoyaltyMembers.reduce(
+    (sum, m) => sum + ((m.overdueMonths?.length || 1) * (m.monthlyFee || 99)),
+    0
+  );
+
+  const totalPendingPaymentsCount = pendingAppointments.length + overdueLoyaltyMembers.length;
+  const totalPendingPaymentsAmount = pendingAppointmentsTotal + pendingLoyaltyTotal;
+
   const totalRevenueEstimated = appointments
     .filter((a) => a.status !== 'cancelado')
     .reduce((sum, a) => sum + (a.servicePrice || 0), 0);
 
   const activePatientCount = patients.length;
+  const activeLoyaltyCount = loyaltyMembers.filter((m) => m.status === 'ativo').length;
+
+  // Recharts 7-Day Trend Calculation for Strategic Insights
+  const last7DaysData = useMemo(() => {
+    const result = [];
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+
+      const dayName = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+      const dayNumStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      const formattedLabel = `${dayName.charAt(0).toUpperCase() + dayName.slice(1)} (${dayNumStr})`;
+
+      const dayAppts = appointments.filter((a) => a.date === dateStr && a.status !== 'cancelado');
+      const completedCount = dayAppts.filter((a) => a.status === 'concluido' || a.attendanceStatus === 'presenca').length;
+      const scheduledCount = dayAppts.filter((a) => a.status === 'agendado' || a.status === 'confirmado').length;
+
+      result.push({
+        dateStr,
+        label: formattedLabel,
+        total: dayAppts.length,
+        concluidos: completedCount,
+        agendados: scheduledCount,
+      });
+    }
+    return result;
+  }, [appointments]);
+
+  const totalLast7Days = last7DaysData.reduce((acc, curr) => acc + curr.total, 0);
 
   const handleUpdateStatus = async (id: string, status: AppointmentStatus) => {
     try {
@@ -223,125 +291,281 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     <div className="min-h-[calc(100vh-4rem)] bg-slate-50/60 pb-12 pt-4 px-3 sm:px-6">
       <div className="max-w-7xl mx-auto">
 
+        {/* 📊 EXECUTIVE TOP SUMMARY CARDS */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 mb-6">
+
+          {/* Card 1: Agendamentos do Dia (Emerald / Forest Green) */}
+          <div className="bg-white rounded-2xl p-4 border border-emerald-200/90 shadow-2xs hover:shadow-md transition-all relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 rounded-full -mr-6 -mt-6 pointer-events-none group-hover:scale-125 transition-transform" />
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-100/90 px-2.5 py-0.5 rounded-full">
+                Sessões de Hoje
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
+                <CalendarIcon className="w-5 h-5" />
+              </div>
+            </div>
+            <div className="mt-1">
+              <div className="flex items-baseline space-x-2">
+                <span className="text-2xl sm:text-3xl font-black text-slate-900">{todayAppointments.length}</span>
+                <span className="text-xs font-extrabold text-emerald-700">agendamento(s)</span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1.5 flex-wrap">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="font-semibold text-slate-700">{completedToday.length} concluído(s)</span>
+                <span className="text-slate-300">•</span>
+                <span className="font-semibold text-amber-700">{pendingToday.length} pendente(s)</span>
+              </p>
+            </div>
+            <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-between items-center">
+              <button
+                id="btn-card-goto-agenda"
+                onClick={() => setActiveTab('agenda')}
+                className="text-xs font-bold text-emerald-800 hover:text-emerald-950 flex items-center space-x-1 hover:underline"
+              >
+                <span>Ver Agenda de Hoje</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Card 2: Pagamentos Pendentes (Amber / Golden Rose Alert) */}
+          <div className={`bg-white rounded-2xl p-4 border shadow-2xs hover:shadow-md transition-all relative overflow-hidden group ${
+            totalPendingPaymentsCount > 0 ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200/90'
+          }`}>
+            <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 rounded-full -mr-6 -mt-6 pointer-events-none group-hover:scale-125 transition-transform" />
+            <div className="flex items-center justify-between mb-2">
+              <span className={`text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                totalPendingPaymentsCount > 0 ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-700'
+              }`}>
+                Pagamentos Pendentes
+              </span>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${
+                totalPendingPaymentsCount > 0 ? 'bg-amber-100 text-amber-800 ring-2 ring-amber-300/50' : 'bg-slate-100 text-slate-600'
+              }`}>
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+            </div>
+            <div className="mt-1">
+              <div className="flex items-baseline space-x-2">
+                <span className="text-2xl sm:text-3xl font-black text-slate-900">{formatCurrency(totalPendingPaymentsAmount)}</span>
+              </div>
+              <p className="text-xs text-slate-600 mt-1 font-medium">
+                {totalPendingPaymentsCount === 0 ? (
+                  <span className="text-emerald-600 font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Nenhum valor pendente!</span>
+                  </span>
+                ) : (
+                  <span>
+                    <strong className="text-amber-900">{totalPendingPaymentsCount} pendência(s)</strong> ({pendingAppointments.length} sessões + {overdueLoyaltyMembers.length} clube)
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-between items-center">
+              <button
+                id="btn-card-goto-financeiro"
+                onClick={() => setActiveTab('financeiro')}
+                className="text-xs font-bold text-amber-900 hover:text-amber-950 flex items-center space-x-1 hover:underline"
+              >
+                <span>Gestão de Cobranças</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Card 3: Previsão de Receita / Faturamento (Teal / Cyan) */}
+          <div className="bg-white rounded-2xl p-4 border border-teal-200/90 shadow-2xs hover:shadow-md transition-all relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-teal-500/5 rounded-full -mr-6 -mt-6 pointer-events-none group-hover:scale-125 transition-transform" />
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-teal-800 bg-teal-100/90 px-2.5 py-0.5 rounded-full">
+                Receita Estimada
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center shrink-0 shadow-2xs">
+                <TrendingUp className="w-5 h-5" />
+              </div>
+            </div>
+            <div className="mt-1">
+              <div className="flex items-baseline space-x-2">
+                <span className="text-2xl sm:text-3xl font-black text-slate-900">{formatCurrency(totalRevenueEstimated)}</span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1 font-medium">
+                Soma dos atendimentos ativos cadastrados
+              </p>
+            </div>
+            <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-between items-center">
+              <button
+                id="btn-card-goto-reports"
+                onClick={() => setActiveTab('financeiro')}
+                className="text-xs font-bold text-teal-800 hover:text-teal-950 flex items-center space-x-1 hover:underline"
+              >
+                <span>Relatórios Financeiros</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Card 4: Pacientes Ativos & Clube Fidelidade (Purple / Crown) */}
+          <div className="bg-white rounded-2xl p-4 border border-purple-200/90 shadow-2xs hover:shadow-md transition-all relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-full -mr-6 -mt-6 pointer-events-none group-hover:scale-125 transition-transform" />
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-purple-800 bg-purple-100/90 px-2.5 py-0.5 rounded-full">
+                Pacientes & Clube
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 shadow-2xs">
+                <Crown className="w-5 h-5 text-[#D0A73B]" />
+              </div>
+            </div>
+            <div className="mt-1">
+              <div className="flex items-baseline space-x-2">
+                <span className="text-2xl sm:text-3xl font-black text-slate-900">{activePatientCount}</span>
+                <span className="text-xs font-extrabold text-purple-700">pacientes</span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1 font-medium">
+                <strong className="text-purple-900 font-bold">{activeLoyaltyCount}</strong> no Clube Fidelidade R$ 99
+              </p>
+            </div>
+            <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-between items-center">
+              <button
+                id="btn-card-goto-fidelidade"
+                onClick={() => setActiveTab('fidelidade')}
+                className="text-xs font-bold text-purple-800 hover:text-purple-950 flex items-center space-x-1 hover:underline"
+              >
+                <span>Clube Fidelidade R$ 99</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+        </div>
+
         {/* Tab Navigation Menu */}
-        <div className="bg-white rounded-2xl p-2 shadow-2xs border border-[#C9D8CB] mb-6 flex items-center space-x-1 overflow-x-auto no-scrollbar">
-          <button
-            id="tab-dashboard"
-            onClick={() => setActiveTab('dashboard')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-              activeTab === 'dashboard'
-                ? 'bg-[#31523D] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
-            }`}
-          >
-            <LayoutDashboard className="w-4 h-4 text-[#D0A73B]" />
-            <span>Visão Geral</span>
-          </button>
+        <div className="bg-white rounded-2xl p-2 shadow-2xs border border-[#C9D8CB] mb-6 flex items-center justify-between gap-2">
+          <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar flex-1">
+            <button
+              id="tab-dashboard"
+              onClick={() => setActiveTab('dashboard')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+                activeTab === 'dashboard'
+                  ? 'bg-[#31523D] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
+              }`}
+            >
+              <LayoutDashboard className="w-4 h-4 text-[#D0A73B]" />
+              <span>Visão Geral</span>
+            </button>
 
-          <button
-            id="tab-agenda"
-            onClick={() => setActiveTab('agenda')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-              activeTab === 'agenda'
-                ? 'bg-[#31523D] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
-            }`}
-          >
-            <CalendarIcon className="w-4 h-4 text-[#D0A73B]" />
-            <span>Agenda & Atendimentos</span>
-          </button>
+            <button
+              id="tab-agenda"
+              onClick={() => setActiveTab('agenda')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+                activeTab === 'agenda'
+                  ? 'bg-[#31523D] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
+              }`}
+            >
+              <CalendarIcon className="w-4 h-4 text-[#D0A73B]" />
+              <span>Agenda & Atendimentos</span>
+            </button>
 
-          <button
-            id="tab-servicos"
-            onClick={() => setActiveTab('servicos')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-              activeTab === 'servicos'
-                ? 'bg-[#31523D] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
-            }`}
-          >
-            <Briefcase className="w-4 h-4 text-[#D0A73B]" />
-            <span>Serviços ({services.length})</span>
-          </button>
+            <button
+              id="tab-servicos"
+              onClick={() => setActiveTab('servicos')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+                activeTab === 'servicos'
+                  ? 'bg-[#31523D] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
+              }`}
+            >
+              <Briefcase className="w-4 h-4 text-[#D0A73B]" />
+              <span>Serviços ({services.length})</span>
+            </button>
 
-          <button
-            id="tab-horarios"
-            onClick={() => setActiveTab('horarios')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-              activeTab === 'horarios'
-                ? 'bg-[#31523D] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
-            }`}
-          >
-            <Clock className="w-4 h-4 text-[#D0A73B]" />
-            <span>Horários de Atendimento</span>
-          </button>
+            <button
+              id="tab-horarios"
+              onClick={() => setActiveTab('horarios')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+                activeTab === 'horarios'
+                  ? 'bg-[#31523D] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
+              }`}
+            >
+              <Clock className="w-4 h-4 text-[#D0A73B]" />
+              <span>Horários de Atendimento</span>
+            </button>
 
-          <button
-            id="tab-pacientes"
-            onClick={() => setActiveTab('pacientes')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-              activeTab === 'pacientes'
-                ? 'bg-[#31523D] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
-            }`}
-          >
-            <Users className="w-4 h-4 text-[#D0A73B]" />
-            <span>Pacientes ({patients.length})</span>
-          </button>
+            <button
+              id="tab-pacientes"
+              onClick={() => setActiveTab('pacientes')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+                activeTab === 'pacientes'
+                  ? 'bg-[#31523D] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
+              }`}
+            >
+              <Users className="w-4 h-4 text-[#D0A73B]" />
+              <span>Pacientes ({patients.length})</span>
+            </button>
 
-          <button
-            id="tab-fidelidade"
-            onClick={() => setActiveTab('fidelidade')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-              activeTab === 'fidelidade'
-                ? 'bg-[#31523D] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
-            }`}
-          >
-            <Crown className="w-4 h-4 text-[#D0A73B]" />
-            <span>Fidelidade R$ 99</span>
-          </button>
+            <button
+              id="tab-fidelidade"
+              onClick={() => setActiveTab('fidelidade')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+                activeTab === 'fidelidade'
+                  ? 'bg-[#31523D] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
+              }`}
+            >
+              <Crown className="w-4 h-4 text-[#D0A73B]" />
+              <span>Fidelidade R$ 99</span>
+            </button>
 
-          <button
-            id="tab-financeiro"
-            onClick={() => setActiveTab('financeiro')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-              activeTab === 'financeiro'
-                ? 'bg-[#31523D] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
-            }`}
-          >
-            <DollarSign className="w-4 h-4 text-[#D0A73B]" />
-            <span>Gestão Financeira</span>
-            {!financialPasswordUnlocked && <Lock className="w-3 h-3 text-[#D0A73B] shrink-0" />}
-          </button>
+            <button
+              id="tab-financeiro"
+              onClick={() => setActiveTab('financeiro')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+                activeTab === 'financeiro'
+                  ? 'bg-[#31523D] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
+              }`}
+            >
+              <DollarSign className="w-4 h-4 text-[#D0A73B]" />
+              <span>Gestão Financeira</span>
+              {!financialPasswordUnlocked && <Lock className="w-3 h-3 text-[#D0A73B] shrink-0" />}
+            </button>
 
-          <button
-            id="tab-qrcode"
-            onClick={() => setActiveTab('qrcode')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-              activeTab === 'qrcode'
-                ? 'bg-[#31523D] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
-            }`}
-          >
-            <QrCode className="w-4 h-4 text-[#D0A73B]" />
-            <span>Link & QR Code</span>
-          </button>
+            <button
+              id="tab-qrcode"
+              onClick={() => setActiveTab('qrcode')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+                activeTab === 'qrcode'
+                  ? 'bg-[#31523D] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
+              }`}
+            >
+              <QrCode className="w-4 h-4 text-[#D0A73B]" />
+              <span>Link & QR Code</span>
+            </button>
 
-          <button
-            id="tab-webhook"
-            onClick={() => setActiveTab('webhook')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-              activeTab === 'webhook'
-                ? 'bg-[#31523D] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
-            }`}
-          >
-            <Radio className="w-4 h-4 text-[#D0A73B]" />
-            <span>Webhook</span>
-          </button>
+            <button
+              id="tab-webhook"
+              onClick={() => setActiveTab('webhook')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+                activeTab === 'webhook'
+                  ? 'bg-[#31523D] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
+              }`}
+            >
+              <Radio className="w-4 h-4 text-[#D0A73B]" />
+              <span>Webhook</span>
+            </button>
+          </div>
+
+          {/* Toast & Notification Bell Component */}
+          <div className="shrink-0 pl-2 border-l border-slate-100 flex items-center">
+            <AdminToasts appointments={appointments} onNavigateTab={(tab) => setActiveTab(tab)} />
+          </div>
         </div>
 
         {/* TAB 1: DASHBOARD OVERVIEW */}
@@ -388,6 +612,118 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <span className="text-2xl font-extrabold text-slate-800">{activePatientCount}</span>
               </div>
 
+            </div>
+
+            {/* Recharts Chart: Tendência de Agendamentos da Última Semana */}
+            <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/80 shadow-2xs space-y-4">
+              <div className="sm:flex items-center justify-between gap-4 pb-3 border-b border-slate-100">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-[#31523D]/10 text-[#31523D] flex items-center justify-center shrink-0">
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                    <h3 className="text-base font-bold text-slate-800">
+                      Tendência de Atendimentos & Agendamentos (Última Semana)
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Evolução diária de novas sessões agendadas e presenciais confirmadas nos últimos 7 dias.
+                  </p>
+                </div>
+
+                <div className="mt-2 sm:mt-0 flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/80">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#31523D]"></span>
+                    <span>Total na Semana: <strong className="text-slate-900 font-extrabold">{totalLast7Days} sessões</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Chart Container */}
+              <div className="w-full h-64 pt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={last7DaysData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#31523D" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#31523D" stopOpacity={0.0} />
+                      </linearGradient>
+                      <linearGradient id="colorConcluidos" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#D0A73B" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#D0A73B" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis
+                      dataKey="label"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: '#64748b', fontSize: 11, fontWeight: 600 }}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: '#64748b', fontSize: 11 }}
+                    />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-slate-900 text-white p-3 rounded-xl shadow-lg border border-slate-700 text-xs space-y-1">
+                              <p className="font-extrabold text-[#D0A73B] border-b border-slate-800 pb-1">{label}</p>
+                              <div className="flex items-center justify-between gap-4 pt-0.5">
+                                <span className="text-slate-300">Total Agendado:</span>
+                                <strong className="text-white font-bold">{data.total} sessões</strong>
+                              </div>
+                              <div className="flex items-center justify-between gap-4">
+                                <span className="text-emerald-400">Presenças Concluídas:</span>
+                                <strong className="text-emerald-300 font-bold">{data.concluidos}</strong>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="total"
+                      name="Total Agendado"
+                      stroke="#31523D"
+                      strokeWidth={3}
+                      fillOpacity={1}
+                      fill="url(#colorTotal)"
+                      dot={{ r: 4, fill: '#31523D', strokeWidth: 2, stroke: '#ffffff' }}
+                      activeDot={{ r: 6, fill: '#31523D' }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="concluidos"
+                      name="Presenças Concluídas"
+                      stroke="#D0A73B"
+                      strokeWidth={2}
+                      strokeDasharray="4 4"
+                      fillOpacity={1}
+                      fill="url(#colorConcluidos)"
+                      dot={{ r: 3, fill: '#D0A73B' }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Legend Footer */}
+              <div className="flex flex-wrap items-center justify-center gap-6 pt-2 text-xs text-slate-600 border-t border-slate-100">
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-1 bg-[#31523D] rounded-full"></span>
+                  <span>Total de Agendamentos (Demanda Diária)</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-0.5 bg-[#D0A73B] border border-dashed border-[#D0A73B]"></span>
+                  <span>Presenças Concluídas</span>
+                </span>
+              </div>
             </div>
 
             {/* Today's Timeline & Quick Actions */}

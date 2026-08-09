@@ -19,7 +19,10 @@ import {
   Sparkles,
   Phone,
   ArrowUpRight,
-  ChevronRight
+  ChevronRight,
+  FileText,
+  Printer,
+  Download
 } from 'lucide-react';
 
 interface AdminFinancialProps {
@@ -186,6 +189,215 @@ export const AdminFinancial: React.FC<AdminFinancialProps> = ({ clinic, appointm
     }
   };
 
+  // Export PDF Report function
+  const handleExportFinancialPDF = () => {
+    const printWindow = window.open('', '_blank', 'width=900,height=800');
+    if (!printWindow) {
+      alert('Por favor, permita pop-ups no seu navegador para exportar o relatório em PDF.');
+      return;
+    }
+
+    const nowStr = new Date().toLocaleString('pt-BR');
+    
+    // Confirmed appointments list
+    const confirmedAppts = appointments.filter((a) => a.status === 'concluido');
+    
+    // Confirmed loyalty payments list
+    const confirmedLoyaltyPayments: { patientName: string; monthYear: string; amount: number; paymentMethod?: string }[] = [];
+    loyaltyMembers.forEach((member) => {
+      (member.payments || []).forEach((p) => {
+        confirmedLoyaltyPayments.push({
+          patientName: member.patientName,
+          monthYear: p.monthYear,
+          amount: p.amount || 99,
+          paymentMethod: p.paymentMethod || 'Cartão Recorrente'
+        });
+      });
+    });
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <title>Relatório Financeiro & Contábil - ${clinic.name || 'Dra. Elays Marinho'}</title>
+        <style>
+          @media print {
+            body { margin: 0; padding: 20px; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; font-size: 12px; }
+            .no-print { display: none; }
+          }
+          body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; padding: 30px; background: #fff; line-height: 1.4; }
+          .header { border-bottom: 2px solid #31523D; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; }
+          .clinic-name { font-size: 20px; font-weight: 800; color: #31523D; margin: 0; }
+          .doc-title { font-size: 14px; font-weight: 700; color: #D0A73B; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+          .meta { font-size: 11px; color: #64748b; text-align: right; }
+          
+          .kpi-container { display: flex; gap: 15px; margin-bottom: 25px; }
+          .kpi-box { flex: 1; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; text-align: center; background: #f8fafc; }
+          .kpi-box.pending { border-color: #f59e0b; background: #fffbeb; }
+          .kpi-box.confirmed { border-color: #10b981; background: #ecfdf5; }
+          .kpi-title { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
+          .kpi-val { font-size: 18px; font-weight: 900; }
+          .kpi-val.green { color: #047857; }
+          .kpi-val.amber { color: #b45309; }
+          
+          h2 { font-size: 13px; font-weight: 800; color: #0f172a; border-left: 4px solid #31523D; padding-left: 8px; margin-top: 25px; margin-bottom: 10px; text-transform: uppercase; }
+          
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; }
+          th { background-color: #31523D; color: #ffffff; text-align: left; padding: 8px 10px; font-weight: 700; font-size: 10px; text-transform: uppercase; }
+          td { border-bottom: 1px solid #e2e8f0; padding: 8px 10px; }
+          tr:nth-child(even) { background-color: #f8fafc; }
+          
+          .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 9px; text-transform: uppercase; }
+          .badge-pendente { background: #fef3c7; color: #92400e; }
+          .badge-atrasado { background: #ffe4e6; color: #9f1239; }
+          .badge-pago { background: #d1fae5; color: #065f46; }
+          
+          .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #cbd5e1; display: flex; justify-content: space-between; align-items: flex-end; font-size: 10px; color: #64748b; }
+          .sign-line { width: 200px; border-top: 1px solid #0f172a; text-align: center; padding-top: 4px; font-weight: 700; color: #0f172a; }
+          .btn-print { background: #31523D; color: #fff; border: none; padding: 10px 20px; font-weight: 700; border-radius: 6px; cursor: pointer; margin-bottom: 20px; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="no-print" style="text-align: right;">
+          <button class="btn-print" onclick="window.print()">🖨️ Imprimir ou Salvar em PDF</button>
+        </div>
+        
+        <div class="header">
+          <div>
+            <h1 class="clinic-name">${clinic.name || 'Clínica Dra. Elays Marinho'}</h1>
+            <div class="doc-title">Relatório de Controle Financeiro & Contábil</div>
+            <div style="font-size: 11px; color: #475569; margin-top: 4px;">Fisioterapia Pélvica, Obstétrica & Studio Pilates</div>
+          </div>
+          <div class="meta">
+            <div><strong>Data de Emissão:</strong> ${nowStr}</div>
+            <div><strong>Emitido por:</strong> Gestão Financeira</div>
+            <div><strong>Contato:</strong> ${clinic.phone || ''}</div>
+          </div>
+        </div>
+
+        <div class="kpi-container">
+          <div class="kpi-box confirmed">
+            <div class="kpi-title">Total Recebido (Confirmado)</div>
+            <div class="kpi-val green">${formatCurrency(totalConfirmedRevenue)}</div>
+            <div style="font-size: 10px; color: #047857; margin-top: 2px;">${confirmedAppts.length + confirmedLoyaltyPayments.length} lançamento(s) concluído(s)</div>
+          </div>
+          <div class="kpi-box pending">
+            <div class="kpi-title">Total Pendente / Atrasado</div>
+            <div class="kpi-val amber">${formatCurrency(totalPendingAmount)}</div>
+            <div style="font-size: 10px; color: #b45309; margin-top: 2px;">${pendingItems.length} pendência(s) em aberto</div>
+          </div>
+          <div class="kpi-box">
+            <div class="kpi-title">Balanço Estimado Total</div>
+            <div class="kpi-val" style="color: #1e293b;">${formatCurrency(totalConfirmedRevenue + totalPendingAmount)}</div>
+            <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Pilates + Clube de Fidelidade</div>
+          </div>
+        </div>
+
+        <h2>1. Detalhamento de Cobranças Pendentes & Atrasadas</h2>
+        ${pendingItems.length === 0 ? '<p style="font-size: 11px; color: #059669; font-weight: bold; padding: 10px; background: #ecfdf5; border-radius: 6px;">Nenhuma pendência financeira encontrada no momento.</p>' : `
+          <table>
+            <thead>
+              <tr>
+                <th>Paciente</th>
+                <th>Telefone</th>
+                <th>Tipo / Serviço</th>
+                <th>Vencimento / Data</th>
+                <th>Status</th>
+                <th style="text-align: right;">Valor (R$)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${pendingItems.map((item) => `
+                <tr>
+                  <td><strong>${item.patientName}</strong></td>
+                  <td>${item.patientPhone}</td>
+                  <td>${item.title}</td>
+                  <td>${formatDatePtBR(item.dateOrDue)}</td>
+                  <td><span class="badge badge-${item.status}">${item.status.toUpperCase()}</span></td>
+                  <td style="text-align: right; font-weight: bold; color: #b45309;">${formatCurrency(item.amount)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot>
+              <tr style="background: #f1f5f9; font-weight: bold;">
+                <td colspan="5" style="text-align: right;">Subtotal Pendente:</td>
+                <td style="text-align: right; color: #b45309; font-size: 12px;">${formatCurrency(totalPendingAmount)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        `}
+
+        <h2>2. Detalhamento de Pagamentos Recebidos & Confirmados</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Paciente</th>
+              <th>Origem / Serviço</th>
+              <th>Data / Referência</th>
+              <th>Status</th>
+              <th style="text-align: right;">Valor Recebido (R$)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${confirmedAppts.map((app) => `
+              <tr>
+                <td><strong>${app.patientName}</strong></td>
+                <td>Sessão: ${app.serviceName}</td>
+                <td>${formatDatePtBR(app.date)}</td>
+                <td><span class="badge badge-pago">CONCLUÍDO</span></td>
+                <td style="text-align: right; font-weight: bold; color: #047857;">${formatCurrency(app.servicePrice || 0)}</td>
+              </tr>
+            `).join('')}
+            ${confirmedLoyaltyPayments.map((p) => `
+              <tr>
+                <td><strong>${p.patientName}</strong></td>
+                <td>Clube Fidelidade (${p.paymentMethod})</td>
+                <td>Ref. ${p.monthYear}</td>
+                <td><span class="badge badge-pago">PAGO</span></td>
+                <td style="text-align: right; font-weight: bold; color: #047857;">${formatCurrency(p.amount)}</td>
+              </tr>
+            `).join('')}
+            ${confirmedAppts.length === 0 && confirmedLoyaltyPayments.length === 0 ? `
+              <tr>
+                <td colspan="5" style="text-align: center; color: #94a3b8; padding: 15px;">Nenhum recebimento confirmado no histórico recente.</td>
+              </tr>
+            ` : ''}
+          </tbody>
+          <tfoot>
+            <tr style="background: #ecfdf5; font-weight: bold;">
+              <td colspan="4" style="text-align: right;">Subtotal Recebido:</td>
+              <td style="text-align: right; color: #047857; font-size: 12px;">${formatCurrency(totalConfirmedRevenue)}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div class="footer">
+          <div>
+            <div>Documento oficial de auditoria contábil e controle financeiro.</div>
+            <div>${clinic.name || 'Clínica Dra. Elays Marinho'} — Sistema de Gestão Integrada</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="height: 35px;"></div>
+            <div class="sign-line">Assinatura / Visto do Responsável</div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 400);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   return (
     <div className="space-y-6">
       {/* Title Header */}
@@ -203,20 +415,32 @@ export const AdminFinancial: React.FC<AdminFinancialProps> = ({ clinic, appointm
             Painel de Controle Financeiro e Cobrança
           </h2>
           <p className="text-xs text-slate-500 mt-0.5 max-w-2xl">
-            Acompanhe pagamentos pendentes de Pilates e Clube de Fidelidade, envie mensagens de lembrete no WhatsApp e ofereça cobrança recorrente no cartão sem comprometer o limite da paciente.
+            Acompanhe pagamentos pendentes de Pilates e Clube de Fidelidade, envie mensagens de lembrete no WhatsApp, exporte relatórios contábeis e ofereça cobrança recorrente no cartão.
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            fetchLoyalty();
-            if (onReload) onReload();
-          }}
-          className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold rounded-2xl transition-all flex items-center justify-center space-x-1.5 shrink-0 cursor-pointer"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Atualizar Dados</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            id="btn-export-financial-pdf"
+            onClick={handleExportFinancialPDF}
+            className="px-4 py-2.5 bg-[#31523D] hover:bg-[#25402e] text-[#D0A73B] text-xs font-extrabold rounded-2xl transition-all flex items-center justify-center space-x-1.5 shadow-2xs hover:shadow-xs cursor-pointer border border-[#D0A73B]/30"
+          >
+            <Printer className="w-4 h-4 text-[#D0A73B]" />
+            <span>Exportar Relatório PDF</span>
+          </button>
+
+          <button
+            onClick={() => {
+              fetchLoyalty();
+              if (onReload) onReload();
+            }}
+            className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold rounded-2xl transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
+            title="Atualizar dados financeiros"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Atualizar</span>
+          </button>
+        </div>
       </div>
 
       {/* Success Notification Alert */}
