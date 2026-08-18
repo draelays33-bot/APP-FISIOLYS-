@@ -3,7 +3,8 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { initialServices, initialScheduleConfig, initialClinicConfig, initialAppointments, initialPatients, initialTestimonials, initialLoyaltyMembers } from './src/data/initialData';
-import { Service, ScheduleConfig, ClinicConfig, Appointment, Patient, ReminderLog, Testimonial, LoyaltyMember } from './src/types';
+import { Service, ScheduleConfig, ClinicConfig, Appointment, Patient, ReminderLog, Testimonial, LoyaltyMember, WhatsAppLog } from './src/types';
+import { interpolateWhatsAppTemplate, getWhatsAppDirectUrl, getWhatsAppWebUrl, cleanPhoneNumber, DEFAULT_WHATSAPP_TEMPLATES } from './src/utils/whatsappUtils';
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -22,6 +23,7 @@ interface DatabaseSchema {
   reminderLogs?: ReminderLog[];
   testimonials?: Testimonial[];
   loyaltyMembers?: LoyaltyMember[];
+  whatsappLogs?: WhatsAppLog[];
 }
 
 function loadDatabase(): DatabaseSchema {
@@ -37,7 +39,8 @@ function loadDatabase(): DatabaseSchema {
         patients: parsed.patients || initialPatients,
         reminderLogs: parsed.reminderLogs || [],
         testimonials: parsed.testimonials || initialTestimonials,
-        loyaltyMembers: parsed.loyaltyMembers || initialLoyaltyMembers
+        loyaltyMembers: parsed.loyaltyMembers || initialLoyaltyMembers,
+        whatsappLogs: parsed.whatsappLogs || []
       };
     }
   } catch (err) {
@@ -51,7 +54,8 @@ function loadDatabase(): DatabaseSchema {
     patients: initialPatients,
     reminderLogs: [],
     testimonials: initialTestimonials,
-    loyaltyMembers: initialLoyaltyMembers
+    loyaltyMembers: initialLoyaltyMembers,
+    whatsappLogs: []
   };
 }
 
@@ -75,10 +79,11 @@ if (db.clinic.whatsapp === '5593991234567' || !db.clinic.whatsapp.includes('9912
 if (!db.clinic.googleReviewUrl || db.clinic.googleReviewUrl.includes('maps/search/?api=1')) {
   db.clinic.googleReviewUrl = 'https://www.google.com/search?q=Fisiolys+Fisioterapia+e+Pilates+Altamira+Avaliar+no+Google';
 }
-// Sync services if missing new services or outdated prices/durations/images
+// Sync services if missing new services or outdated prices/durations/images or old naming
 if (
   !db.services.some(s => s.name === 'Aula Experimental de Pilates') ||
   !db.services.some(s => s.name.includes('Protocolo de Tratamento de Coluna')) ||
+  db.services.some(s => s.name.includes('Pilates Clássico')) ||
   db.services.find(s => s.id === 'serv-domiciliar')?.price !== 150 ||
   !db.services.find(s => s.id === 'serv-1')?.active ||
   db.services.find(s => s.id === 'serv-5')?.imageUrl.includes('fisioterapia_avaliacao_')
@@ -452,12 +457,77 @@ app.post('/api/appointments', async (req, res) => {
       });
       clearTimeout(timeout);
 
-      if (resp.ok) {
+  if (resp.ok) {
         newAppt.webhookSent = true;
         webhookTriggered = true;
       }
     } catch (err) {
       console.warn("Webhook dispatch failed or timed out:", err);
+    }
+  }
+
+  // Trigger Automatic WhatsApp Booking Confirmation if enabled
+  if (db.clinic.whatsappAutoSendBooking !== false) {
+    const template = db.clinic.whatsappTemplateBooking || DEFAULT_WHATSAPP_TEMPLATES.bookingConfirmation;
+    const msgText = interpolateWhatsAppTemplate(template, {
+      patientName: newAppt.patientName,
+      patientPhone: newAppt.patientPhone,
+      serviceName: newAppt.serviceName,
+      servicePrice: newAppt.servicePrice,
+      date: newAppt.date,
+      time: newAppt.time,
+      clinicName: db.clinic.name,
+      managerName: db.clinic.managerName,
+      address: db.clinic.address,
+      city: db.clinic.city,
+      paymentMethod: newAppt.paymentMethod
+    });
+
+    if (!db.whatsappLogs) db.whatsappLogs = [];
+
+    // Attempt API dispatch if API URL is configured, else register ready log
+    const provider = db.clinic.whatsappProvider || 'whatsapp_web';
+    if (db.clinic.whatsappApiUrl && provider !== 'whatsapp_web') {
+      sendWhatsAppMessageViaGateway(
+        provider,
+        db.clinic.whatsappApiUrl,
+        db.clinic.whatsappApiToken || '',
+        db.clinic.whatsappInstanceId || '',
+        newAppt.patientPhone,
+        msgText
+      ).then(res => {
+        newAppt.whatsappStatus = res.status;
+        newAppt.whatsappSentAt = new Date().toISOString();
+        if (!res.success) newAppt.whatsappError = res.details;
+        
+        db.whatsappLogs?.unshift({
+          id: `wlog-${Date.now()}`,
+          appointmentId: newAppt.id,
+          patientName: newAppt.patientName,
+          patientPhone: newAppt.patientPhone,
+          type: 'confirmacao',
+          provider,
+          status: res.status,
+          message: msgText,
+          sentAt: new Date().toISOString(),
+          errorDetails: res.details
+        });
+        saveDatabase(db);
+      }).catch(e => console.warn("WhatsApp background dispatch error:", e));
+    } else {
+      newAppt.whatsappStatus = 'enviado';
+      newAppt.whatsappSentAt = new Date().toISOString();
+      db.whatsappLogs.unshift({
+        id: `wlog-${Date.now()}`,
+        appointmentId: newAppt.id,
+        patientName: newAppt.patientName,
+        patientPhone: newAppt.patientPhone,
+        type: 'confirmacao',
+        provider: 'whatsapp_web',
+        status: 'enviado',
+        message: msgText,
+        sentAt: new Date().toISOString()
+      });
     }
   }
 
@@ -563,6 +633,113 @@ app.post('/api/appointments/mark-attendance', (req, res) => {
 
   saveDatabase(db);
   res.json({ success: true, appointment: appt });
+});
+
+// Patient Self Check-in endpoint (via QR Code or Patient Portal)
+app.post('/api/check-in', (req, res) => {
+  const { appointmentId, patientPhone, patientName, method = 'qrcode', notes } = req.body;
+  const now = new Date();
+  const nowYear = now.getFullYear();
+  const nowMonth = String(now.getMonth() + 1).padStart(2, '0');
+  const nowDate = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${nowYear}-${nowMonth}-${nowDate}`;
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  let targetAppt: any = null;
+
+  if (appointmentId) {
+    targetAppt = db.appointments.find(a => a.id === appointmentId);
+  }
+
+  if (!targetAppt && (patientPhone || patientName)) {
+    const cleanPhone = (patientPhone || '').replace(/\D/g, '');
+    const nameLower = (patientName || '').trim().toLowerCase();
+
+    // First try today's appointment
+    targetAppt = db.appointments.find(a => {
+      const aPhoneClean = a.patientPhone.replace(/\D/g, '');
+      const matchPhone = cleanPhone.length >= 6 && aPhoneClean.includes(cleanPhone);
+      const matchName = nameLower && a.patientName.toLowerCase().includes(nameLower);
+      return (matchPhone || matchName) && a.date === todayStr && a.status !== 'cancelado';
+    });
+
+    // If none today, look for the most recent scheduled appointment
+    if (!targetAppt) {
+      targetAppt = db.appointments.find(a => {
+        const aPhoneClean = a.patientPhone.replace(/\D/g, '');
+        const matchPhone = cleanPhone.length >= 6 && aPhoneClean.includes(cleanPhone);
+        const matchName = nameLower && a.patientName.toLowerCase().includes(nameLower);
+        return (matchPhone || matchName) && a.status !== 'cancelado';
+      });
+    }
+  }
+
+  if (targetAppt) {
+    targetAppt.attendanceStatus = 'presenca';
+    targetAppt.status = 'concluido';
+    targetAppt.checkedInAt = now.toISOString();
+    targetAppt.checkInMethod = method;
+    if (notes) {
+      targetAppt.attendanceNotes = targetAppt.attendanceNotes ? `${targetAppt.attendanceNotes} | ${notes}` : notes;
+    }
+
+    syncPatientStats(targetAppt.patientPhone);
+    syncPatientStats(targetAppt.patientName);
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      appointment: targetAppt,
+      message: `Check-in confirmado com sucesso! Seja bem-vindo(a) à Fisiolys, ${targetAppt.patientName}. A Dra. ${db.clinic.managerName} foi notificada da sua chegada.`,
+      checkedInAt: targetAppt.checkedInAt,
+      time: timeStr
+    });
+  }
+
+  // If no appointment found, but patient exists or name provided, create a walk-in check-in session for today
+  if (patientName || patientPhone) {
+    const defaultService = db.services[0] || {
+      id: 'srv-1',
+      name: 'Fisioterapia / Pilates',
+      price: 130,
+      durationMinutes: 50
+    };
+
+    const newCheckInAppt: Appointment = {
+      id: `appt-checkin-${Date.now()}`,
+      patientName: patientName || 'Paciente Recepção',
+      patientPhone: patientPhone || '(93) 99999-9999',
+      patientEmail: '',
+      serviceId: defaultService.id,
+      serviceName: defaultService.name,
+      servicePrice: defaultService.price,
+      durationMinutes: defaultService.durationMinutes,
+      date: todayStr,
+      time: timeStr,
+      status: 'concluido',
+      attendanceStatus: 'presenca',
+      checkedInAt: now.toISOString(),
+      checkInMethod: method === 'manual' ? 'manual' : method === 'portal' ? 'portal' : method === 'totem' ? 'totem' : 'qrcode',
+      notes: notes || 'Check-in presencial registrado na clínica',
+      paymentMethod: 'presencial',
+      createdAt: now.toISOString()
+    };
+
+    db.appointments.unshift(newCheckInAppt);
+    syncPatientStats(newCheckInAppt.patientPhone);
+    syncPatientStats(newCheckInAppt.patientName);
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      appointment: newCheckInAppt,
+      message: `Check-in presencial confirmado para hoje às ${timeStr}! Seja bem-vindo(a) à Fisiolys.`,
+      checkedInAt: newCheckInAppt.checkedInAt,
+      time: timeStr
+    });
+  }
+
+  return res.status(400).json({ error: "Não foi possível localizar seu agendamento. Por favor, informe seu nome ou telefone." });
 });
 
 app.get('/api/patient-history', (req, res) => {
@@ -1091,6 +1268,334 @@ app.delete('/api/loyalty/:id', (req, res) => {
   db.loyaltyMembers = db.loyaltyMembers.filter(m => m.id !== id);
   saveDatabase(db);
   res.json({ success: true });
+});
+
+// --- 11. WHATSAPP BUSINESS & WEB AUTOMATION API ---
+
+// Helper function to dispatch WhatsApp messages via provider or web format
+async function sendWhatsAppMessageViaGateway(
+  provider: string,
+  apiUrl: string,
+  apiToken: string,
+  instanceId: string,
+  phone: string,
+  message: string
+): Promise<{ success: boolean; status: 'enviado' | 'erro'; details?: string }> {
+  const cleanPhone = cleanPhoneNumber(phone);
+  if (!cleanPhone) {
+    return { success: false, status: 'erro', details: 'Número de telefone inválido' };
+  }
+
+  // If no API URL configured or provider is 'whatsapp_web', it is sent in WhatsApp Web/Direct mode
+  if (!apiUrl || provider === 'whatsapp_web') {
+    return { success: true, status: 'enviado', details: 'Modo WhatsApp Web (Link Direto gerado com sucesso)' };
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    let body: any = {};
+
+    if (apiToken) {
+      headers['Authorization'] = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`;
+      headers['apikey'] = apiToken;
+    }
+
+    if (provider === 'meta_cloud') {
+      // Meta Graph API WhatsApp Business
+      body = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: cleanPhone,
+        type: "text",
+        text: { preview_url: true, body: message }
+      };
+    } else if (provider === 'evolution') {
+      // Evolution API
+      body = {
+        number: cleanPhone,
+        text: message
+      };
+    } else if (provider === 'zapi') {
+      // Z-API
+      body = {
+        phone: cleanPhone,
+        message: message
+      };
+    } else {
+      // Custom Webhook / n8n / Make / Typebot
+      body = {
+        event: "whatsapp_send_message",
+        phone: cleanPhone,
+        message: message,
+        instanceId: instanceId || 'fisiolys',
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    const res = await fetch(apiUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      return { success: true, status: 'enviado', details: `API HTTP ${res.status} OK` };
+    } else {
+      const errText = await res.text().catch(() => '');
+      return { success: false, status: 'erro', details: `HTTP ${res.status}: ${errText.slice(0, 150)}` };
+    }
+  } catch (err: any) {
+    return { success: false, status: 'erro', details: err.message || 'Falha na conexão com a API' };
+  }
+}
+
+// 1. Get WhatsApp Logs
+app.get('/api/whatsapp/logs', (req, res) => {
+  if (!db.whatsappLogs) db.whatsappLogs = [];
+  res.json(db.whatsappLogs);
+});
+
+// 2. Clear WhatsApp Logs
+app.delete('/api/whatsapp/logs', (req, res) => {
+  db.whatsappLogs = [];
+  saveDatabase(db);
+  res.json({ success: true, message: "Histórico de logs do WhatsApp limpo com sucesso." });
+});
+
+// 3. Send Single WhatsApp Message (for Appointment or Manual)
+app.post('/api/whatsapp/send', async (req, res) => {
+  const { appointmentId, type = 'manual', customMessage, phoneOverride } = req.body;
+  if (!db.whatsappLogs) db.whatsappLogs = [];
+
+  let patientPhone = phoneOverride || '';
+  let patientName = 'Paciente';
+  let serviceName = 'Atendimento';
+  let appt: Appointment | undefined;
+
+  if (appointmentId) {
+    appt = db.appointments.find(a => a.id === appointmentId);
+    if (appt) {
+      patientPhone = appt.patientPhone;
+      patientName = appt.patientName;
+      serviceName = appt.serviceName;
+    }
+  }
+
+  if (!patientPhone) {
+    return res.status(400).json({ error: "Telefone do destinatário não informado." });
+  }
+
+  // Determine Message Content
+  let message = customMessage;
+  if (!message) {
+    let template = db.clinic.whatsappTemplateBooking || DEFAULT_WHATSAPP_TEMPLATES.bookingConfirmation;
+    if (type === 'lembrete_d1') {
+      template = db.clinic.whatsappTemplateD1 || DEFAULT_WHATSAPP_TEMPLATES.reminderD1;
+    } else if (type === 'lembrete_d0') {
+      template = db.clinic.whatsappTemplateD0 || DEFAULT_WHATSAPP_TEMPLATES.reminderD0;
+    }
+
+    message = interpolateWhatsAppTemplate(template, {
+      patientName,
+      patientPhone,
+      serviceName: appt?.serviceName || serviceName,
+      servicePrice: appt?.servicePrice,
+      date: appt?.date || new Date().toISOString().split('T')[0],
+      time: appt?.time || '09:00',
+      clinicName: db.clinic.name,
+      managerName: db.clinic.managerName,
+      address: db.clinic.address,
+      city: db.clinic.city,
+      paymentMethod: appt?.paymentMethod
+    });
+  }
+
+  const provider = db.clinic.whatsappProvider || 'whatsapp_web';
+  const dispatchRes = await sendWhatsAppMessageViaGateway(
+    provider,
+    db.clinic.whatsappApiUrl || '',
+    db.clinic.whatsappApiToken || '',
+    db.clinic.whatsappInstanceId || '',
+    patientPhone,
+    message
+  );
+
+  const log: WhatsAppLog = {
+    id: `wlog-${Date.now()}`,
+    appointmentId: appt?.id,
+    patientName,
+    patientPhone,
+    type,
+    provider,
+    status: dispatchRes.status,
+    message,
+    sentAt: new Date().toISOString(),
+    errorDetails: dispatchRes.details
+  };
+
+  db.whatsappLogs.unshift(log);
+
+  if (appt) {
+    appt.whatsappStatus = dispatchRes.status;
+    appt.whatsappSentAt = new Date().toISOString();
+    if (!dispatchRes.success) appt.whatsappError = dispatchRes.details;
+  }
+
+  saveDatabase(db);
+
+  const directWebUrl = getWhatsAppWebUrl(patientPhone, message);
+  const directAppUrl = getWhatsAppDirectUrl(patientPhone, message);
+
+  res.json({
+    success: dispatchRes.success,
+    status: dispatchRes.status,
+    details: dispatchRes.details,
+    log,
+    message,
+    directWebUrl,
+    directAppUrl
+  });
+});
+
+// 4. Batch Dispatch Reminders for a Date
+app.post('/api/whatsapp/batch-reminders', async (req, res) => {
+  const { date, type = 'lembrete_d0' } = req.body;
+  if (!date) {
+    return res.status(400).json({ error: "Data para disparo em lote não informada." });
+  }
+
+  if (!db.whatsappLogs) db.whatsappLogs = [];
+
+  const targetAppts = db.appointments.filter(a => a.date === date && a.status !== 'cancelado');
+  if (targetAppts.length === 0) {
+    return res.json({
+      success: true,
+      total: 0,
+      sent: 0,
+      errors: 0,
+      message: `Nenhum agendamento ativo encontrado para a data ${date}.`,
+      results: []
+    });
+  }
+
+  const template = type === 'lembrete_d1'
+    ? (db.clinic.whatsappTemplateD1 || DEFAULT_WHATSAPP_TEMPLATES.reminderD1)
+    : (db.clinic.whatsappTemplateD0 || DEFAULT_WHATSAPP_TEMPLATES.reminderD0);
+
+  const provider = db.clinic.whatsappProvider || 'whatsapp_web';
+  const results: any[] = [];
+  let sentCount = 0;
+  let errorCount = 0;
+
+  for (const appt of targetAppts) {
+    const msg = interpolateWhatsAppTemplate(template, {
+      patientName: appt.patientName,
+      patientPhone: appt.patientPhone,
+      serviceName: appt.serviceName,
+      servicePrice: appt.servicePrice,
+      date: appt.date,
+      time: appt.time,
+      clinicName: db.clinic.name,
+      managerName: db.clinic.managerName,
+      address: db.clinic.address,
+      city: db.clinic.city,
+      paymentMethod: appt.paymentMethod
+    });
+
+    const dispatch = await sendWhatsAppMessageViaGateway(
+      provider,
+      db.clinic.whatsappApiUrl || '',
+      db.clinic.whatsappApiToken || '',
+      db.clinic.whatsappInstanceId || '',
+      appt.patientPhone,
+      msg
+    );
+
+    if (dispatch.success) sentCount++;
+    else errorCount++;
+
+    appt.whatsappStatus = dispatch.status;
+    appt.whatsappSentAt = new Date().toISOString();
+    if (!dispatch.success) appt.whatsappError = dispatch.details;
+
+    const log: WhatsAppLog = {
+      id: `wlog-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      appointmentId: appt.id,
+      patientName: appt.patientName,
+      patientPhone: appt.patientPhone,
+      type,
+      provider,
+      status: dispatch.status,
+      message: msg,
+      sentAt: new Date().toISOString(),
+      errorDetails: dispatch.details
+    };
+
+    db.whatsappLogs.unshift(log);
+    results.push({
+      appointmentId: appt.id,
+      patientName: appt.patientName,
+      phone: appt.patientPhone,
+      time: appt.time,
+      status: dispatch.status,
+      details: dispatch.details,
+      directWebUrl: getWhatsAppWebUrl(appt.patientPhone, msg)
+    });
+  }
+
+  saveDatabase(db);
+
+  res.json({
+    success: true,
+    total: targetAppts.length,
+    sent: sentCount,
+    errors: errorCount,
+    date,
+    type,
+    results
+  });
+});
+
+// 5. Test WhatsApp Dispatch
+app.post('/api/whatsapp/test', async (req, res) => {
+  const { phone, message, provider: testProvider, apiUrl: testApiUrl, apiToken: testApiToken } = req.body;
+  if (!phone) {
+    return res.status(400).json({ error: "Telefone para teste é obrigatório." });
+  }
+
+  const text = message || `🧪 Teste de Conexão WhatsApp - Fisiolys Fisioterapia e Pilates!\n\nSe você recebeu esta mensagem, sua integração com a API do WhatsApp está funcionando perfeitamente! 🌿✨\n\nHorário do disparo: ${new Date().toLocaleTimeString('pt-BR')}`;
+  
+  const provider = testProvider || db.clinic.whatsappProvider || 'whatsapp_web';
+  const apiUrl = testApiUrl !== undefined ? testApiUrl : (db.clinic.whatsappApiUrl || '');
+  const apiToken = testApiToken !== undefined ? testApiToken : (db.clinic.whatsappApiToken || '');
+  const instanceId = db.clinic.whatsappInstanceId || '';
+
+  const dispatch = await sendWhatsAppMessageViaGateway(
+    provider,
+    apiUrl,
+    apiToken,
+    instanceId,
+    phone,
+    text
+  );
+
+  const directWebUrl = getWhatsAppWebUrl(phone, text);
+  const directAppUrl = getWhatsAppDirectUrl(phone, text);
+
+  res.json({
+    success: dispatch.success,
+    status: dispatch.status,
+    details: dispatch.details,
+    phone,
+    text,
+    directWebUrl,
+    directAppUrl
+  });
 });
 
 // --- SERVER STARTUP AND VITE MIDDLEWARE ---

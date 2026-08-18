@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ClinicConfig } from '../../types';
 import { generateQRCodeDataUrl, getPublicAppUrl, getGoogleReviewUrl, getClinicMapUrl } from '../../utils/qrUtils';
+import { generateQRPDF } from '../../utils/pdfGenerator';
+import { PrintableQRPDFModal } from '../common/PrintableQRPDFModal';
 import { api } from '../../services/api';
-import { QrCode, Copy, Share2, Download, Printer, Check, Sparkles, ExternalLink, Activity, RefreshCw, ShieldCheck, Star, MapPin, Smartphone, Save, Link as LinkIcon } from 'lucide-react';
+import { QrCode, Copy, Share2, Download, Printer, Check, Sparkles, ExternalLink, Activity, RefreshCw, ShieldCheck, Star, MapPin, Smartphone, Save, Link as LinkIcon, FileText } from 'lucide-react';
 import { GoogleGIcon } from '../public/DownloadAppQRSection';
 
 interface AdminQRCodeProps {
@@ -63,6 +65,9 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState<boolean>(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
+
   const handleDownloadPNG = () => {
     if (!qrDataUrl) return;
     const a = document.createElement('a');
@@ -71,8 +76,26 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
     a.click();
   };
 
-  const handlePrintCard = () => {
-    window.print();
+  const handlePrintCard = async () => {
+    setIsGeneratingPdf(true);
+    try {
+      let pdfType: 'checkin' | 'review' | 'app' = 'app';
+      if (selectedPreset === 'review') pdfType = 'review';
+      else if (selectedPreset === 'app') pdfType = 'app';
+
+      const doc = await generateQRPDF({
+        type: pdfType,
+        clinic: currentClinic,
+        customQrDataUrl: qrDataUrl,
+        customUrl: publicLink,
+      });
+      doc.save(`Fisiolys_Placa_${selectedPreset.toUpperCase()}_A4.pdf`);
+    } catch (e) {
+      console.error('Error generating PDF', e);
+      window.print();
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   };
 
   const handleSaveClinicLinks = async (e: React.FormEvent) => {
@@ -302,22 +325,42 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
           </div>
 
           {/* Download & Print Buttons */}
-          <div className="w-full grid grid-cols-2 gap-2.5 pt-3 border-t border-slate-100">
-            <button
-              id="btn-download-qr-png"
-              onClick={handleDownloadPNG}
-              className="py-2.5 px-3 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-900 text-white flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Baixar PNG</span>
-            </button>
+          <div className="w-full space-y-2 pt-3 border-t border-slate-100">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                id="btn-download-qr-png"
+                onClick={handleDownloadPNG}
+                className="py-2.5 px-3 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-900 text-white flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Baixar PNG</span>
+              </button>
+
+              <button
+                onClick={handlePrintCard}
+                disabled={isGeneratingPdf}
+                className="py-2.5 px-3 rounded-xl font-bold text-xs bg-[#31523D] hover:bg-[#23372B] disabled:opacity-50 text-white flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
+              >
+                {isGeneratingPdf ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#D0A73B]" />
+                    <span>Gerando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Printer className="w-3.5 h-3.5 text-[#D0A73B]" />
+                    <span>Baixar PDF (A4)</span>
+                  </>
+                )}
+              </button>
+            </div>
 
             <button
-              onClick={handlePrintCard}
-              className="py-2.5 px-3 rounded-xl font-bold text-xs bg-teal-700 hover:bg-teal-800 text-white flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
+              onClick={() => setIsPdfModalOpen(true)}
+              className="w-full py-2.5 px-3 rounded-xl font-bold text-xs bg-amber-50 hover:bg-amber-100 text-[#7E611D] border border-[#D0A73B]/40 flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
             >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Imprimir Cartão</span>
+              <FileText className="w-3.5 h-3.5 text-[#7E611D]" />
+              <span>Gerar Kit Completo de Placas (A4)</span>
             </button>
           </div>
 
@@ -390,6 +433,14 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
           </button>
         </div>
       </form>
+
+      {/* Printable QR Code Modal */}
+      <PrintableQRPDFModal
+        isOpen={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
+        clinic={currentClinic}
+        defaultTemplate={selectedPreset === 'review' ? 'review' : selectedPreset === 'app' ? 'app' : 'checkin'}
+      />
 
     </div>
   );

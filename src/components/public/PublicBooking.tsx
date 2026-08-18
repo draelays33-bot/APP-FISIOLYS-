@@ -8,7 +8,6 @@ import { ClinicMascot } from './ClinicMascot';
 import { LoyaltyProgramSection } from './LoyaltyProgramSection';
 import { TestimonialsSection } from './TestimonialsSection';
 import { DownloadAppQRSection } from './DownloadAppQRSection';
-import { PatientSessionsLookup } from './PatientSessionsLookup';
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -41,14 +40,38 @@ interface PublicBookingProps {
   clinic: ClinicConfig;
   services: Service[];
   onBookingSuccess?: () => void;
+  initialService?: Service | null;
+  onNavigateToServices?: () => void;
 }
 
-export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, onBookingSuccess }) => {
-  const [activePublicTab, setActivePublicTab] = useState<'agendar' | 'minhas_sessoes'>('agendar');
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+export const PublicBooking: React.FC<PublicBookingProps> = ({
+  clinic,
+  services,
+  onBookingSuccess,
+  initialService,
+  onNavigateToServices,
+}) => {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  // Helper to format investment frequency per requested categories
+  const getInvestmentTypeLabel = (category: string) => {
+    if (category === 'pilates') return '(Mensal)';
+    if (category === 'massoterapia' || category === 'fisioterapia') return '(Sessão)';
+    return '(Sessão)';
+  };
+
+  const activeServices = services.filter((s) => s.active);
 
   // Form State
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [selectedService, setSelectedService] = useState<Service | null>(initialService || (activeServices.length > 0 ? activeServices[0] : null));
+
+  useEffect(() => {
+    if (initialService) {
+      setSelectedService(initialService);
+      setStep(1);
+    }
+  }, [initialService]);
+
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [patientName, setPatientName] = useState<string>('');
@@ -68,8 +91,6 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
   const [submitError, setSubmitError] = useState<string>('');
   const [confirmedAppointment, setConfirmedAppointment] = useState<Appointment | null>(null);
   const [webhookStatus, setWebhookStatus] = useState<boolean | null>(null);
-
-  const activeServices = services.filter((s) => s.active);
 
   // Auto-select initial active service and set valid date (ONLY if not set)
   useEffect(() => {
@@ -166,21 +187,15 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
   };
 
   const handleNextStep = () => {
-    if (step === 1) {
-      if (!selectedService && activeServices.length > 0) {
-        setSelectedService(activeServices[0]);
-      }
+    if (step === 1 && selectedDate && selectedTime) {
       setStep(2);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } else if (step === 2 && selectedDate && selectedTime) {
-      setStep(3);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   const handlePrevStep = () => {
-    if (step > 1 && step < 4) {
-      setStep((prev) => (prev - 1) as 1 | 2 | 3);
+    if (step === 2) {
+      setStep(1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
@@ -221,7 +236,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
 
       setConfirmedAppointment(result.appointment);
       setWebhookStatus(result.webhookSent);
-      setStep(4);
+      setStep(3);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       if (onBookingSuccess) onBookingSuccess();
     } catch (err: any) {
@@ -401,7 +416,6 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
             <button
               type="button"
               onClick={() => {
-                setActivePublicTab('agendar');
                 setStep(1);
                 setTimeout(() => {
                   const el = document.getElementById('step-1-services-container');
@@ -416,76 +430,28 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
           </div>
         </div>
 
-        {/* Public Navigation Tabs: Agendar vs Consultar Minhas Sessões */}
-        <div className="bg-white rounded-2xl p-2 shadow-2xs border border-[#C9D8CB] mb-6 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setActivePublicTab('agendar');
-              setStep(1);
-              setTimeout(() => {
-                const el = document.getElementById('step-1-services-container');
-                if (el) {
-                  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-              }, 50);
-            }}
-            className={`py-3 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center space-x-2 cursor-pointer ${
-              activePublicTab === 'agendar'
-                ? 'bg-[#31523D] text-white shadow-xs'
-                : 'bg-[#F4F7F4] text-slate-700 hover:bg-[#E8EFE9]'
-            }`}
-          >
-            <CalendarIcon className="w-4 h-4 text-[#D0A73B]" />
-            <span>📅 Marcar Consulta</span>
-          </button>
+        {/* Step Progress Bar */}
+        {step < 3 && (
+          <div className="bg-white rounded-xl p-3 sm:p-4 shadow-2xs border border-[#C9D8CB] mb-6">
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
+              <span className={step >= 1 ? "text-[#5F6D33] font-bold" : ""}>1. Data & Horário</span>
+              <span className={step >= 2 ? "text-[#5F6D33] font-bold" : ""}>2. Seus Dados & Pagamento</span>
+              <span className={step >= 3 ? "text-[#5F6D33] font-bold" : ""}>3. Confirmação</span>
+            </div>
+            <div className="w-full bg-[#E4EBE4] h-2.5 rounded-full overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-[#5F6D33] to-[#D0A73B] h-full transition-all duration-300 ease-out"
+                style={{ width: `${(step / 2) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
 
-          <button
-            type="button"
-            onClick={() => setActivePublicTab('minhas_sessoes')}
-            className={`py-3 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center space-x-2 cursor-pointer ${
-              activePublicTab === 'minhas_sessoes'
-                ? 'bg-[#31523D] text-white shadow-xs'
-                : 'bg-[#F4F7F4] text-slate-700 hover:bg-[#E8EFE9]'
-            }`}
-          >
-            <CheckCircle2 className="w-4 h-4 text-[#D0A73B]" />
-            <span>📋 Área do Paciente • Sessões</span>
-          </button>
-        </div>
-
-        {activePublicTab === 'minhas_sessoes' ? (
-          <PatientSessionsLookup
-            clinicName={clinic.name}
-            onClose={() => {
-              setActivePublicTab('agendar');
-              setStep(1);
-            }}
-          />
-        ) : (
-          <>
-            {/* Step Progress Bar */}
-            {step < 4 && (
-              <div className="bg-white rounded-xl p-3 sm:p-4 shadow-2xs border border-[#C9D8CB] mb-6">
-                <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
-                  <span className={step >= 1 ? "text-[#5F6D33] font-bold" : ""}>1. Serviço</span>
-                  <span className={step >= 2 ? "text-[#5F6D33] font-bold" : ""}>2. Data & Horário</span>
-                  <span className={step >= 3 ? "text-[#5F6D33] font-bold" : ""}>3. Seus Dados</span>
-                </div>
-                <div className="w-full bg-[#E4EBE4] h-2.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-gradient-to-r from-[#5F6D33] to-[#D0A73B] h-full transition-all duration-300 ease-out"
-                    style={{ width: `${(step / 3) * 100}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-        {/* STEP 1: SERVICE SELECTION */}
+        {/* STEP 1: SERVICE + DATE & TIME SELECTION */}
         {step === 1 && (
-          <div id="step-1-services-container" className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-[#C9D8CB]">
+          <div id="step-1-booking-container" className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-[#C9D8CB]">
             {/* Logo and Step Title Header */}
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#E4EBE4]">
+            <div className="flex items-center justify-between mb-5 pb-3 border-b border-[#E4EBE4]">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 rounded-xl overflow-hidden border border-[#D0A73B] shrink-0 shadow-2xs bg-[#23372B]">
                   <img
@@ -497,10 +463,10 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
                 </div>
                 <div>
                   <h3 className="text-base sm:text-lg font-serif font-extrabold text-[#23372B] leading-tight">
-                    Agendamento de Consulta / Sessão
+                    Agendamento de Horário
                   </h3>
                   <p className="text-xs text-[#5F6D33] font-medium">
-                    Selecione o programa para escolher data e horário
+                    Escolha o serviço desejado, a data e o horário
                   </p>
                 </div>
               </div>
@@ -515,220 +481,72 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
               </a>
             </div>
 
-            {/* Exclusive Clinic Mascot - Lys */}
-            <div className="mb-6">
-              <ClinicMascot
-                onBookClick={() => {
-                  setActivePublicTab('agendar');
-                  setStep(1);
-                  setTimeout(() => {
-                    const el = document.getElementById('step-1-services-container');
-                    if (el) {
-                      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                  }, 50);
-                }}
-              />
-            </div>
-
-            {/* Programa de Fidelidade Recorrente R$ 99/mês (Abaixo das Dicas da Lys) */}
-            <LoyaltyProgramSection clinicPhone={clinic.whatsapp} />
-
-            {/* Promotional Highlights Box - Especial Dia dos Pais */}
-            <div className="bg-gradient-to-r from-[#1B2B22] via-[#2D4A37] to-[#1B2B22] rounded-2xl p-4 sm:p-5 text-[#F5EED3] shadow-md border-2 border-[#D0A73B] mb-6 relative overflow-hidden">
-              {/* Decorative background glow */}
-              <div className="absolute -right-8 -top-8 w-32 h-32 bg-[#D0A73B]/10 rounded-full blur-2xl pointer-events-none" />
-              
-              <div className="flex items-start space-x-3 sm:space-x-4 relative z-10">
-                <div className="w-12 h-12 rounded-2xl bg-[#D0A73B] text-[#23372B] flex items-center justify-center shrink-0 shadow-sm text-2xl font-black">
-                  👔
-                </div>
-                <div className="flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[11px] font-black uppercase tracking-wider bg-[#D0A73B] text-[#23372B] px-3 py-0.5 rounded-full shadow-2xs">
-                      👔 ESPECIAL DIA DOS PAIS
-                    </span>
-                    <span className="text-xs text-[#F5EED3] font-bold bg-[#D0A73B]/20 border border-[#D0A73B]/40 px-2.5 py-0.5 rounded-full">
-                      🎁 Recompensa Exclusiva
-                    </span>
-                  </div>
-
-                  <h4 className="text-base sm:text-lg font-serif font-extrabold text-white mt-2 flex items-center gap-2">
-                    <span>Pai Sem Dor e Com Mais Saúde</span>
-                    <span className="text-[#D0A73B]">💙</span>
-                  </h4>
-
-                  <p className="text-xs sm:text-sm text-[#E4EBE4] mt-1.5 leading-relaxed">
-                    Surpreenda seu pai ou cuide de você! Ao contratar qualquer <strong>Programa de Tratamento (Pilates, Coluna ou Fisioterapia)</strong>, você ganha uma <strong>RECOMPENSA EXCLUSIVA DE DIA DOS PAIS:</strong>
-                  </p>
-
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div className="bg-[#23372B]/80 border border-[#D0A73B]/50 p-2.5 rounded-xl flex items-center space-x-2">
-                      <span className="text-base">🎁</span>
-                      <div>
-                        <strong className="text-[#D0A73B] block">RECOMPENSA GRATUITA:</strong>
-                        <span className="text-white font-medium">1 Massoterapia / Liberação Miofascial para o Papai!</span>
-                      </div>
-                    </div>
-
-                    <div className="bg-[#23372B]/80 border border-[#D0A73B]/50 p-2.5 rounded-xl flex items-center space-x-2">
-                      <span className="text-base">⚡</span>
-                      <div>
-                        <strong className="text-[#D0A73B] block">AULA EXPERIMENTAL:</strong>
-                        <span className="text-white font-medium">Pilates Prático por apenas R$ 49,00 (30 min)</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Notice / Observation Banner requested by user */}
-            <div id="services-list-start" className="bg-[#F4F7F4] border-2 border-[#5F6D33] p-4 rounded-2xl flex items-center space-x-3 text-slate-800 shadow-2xs mb-5">
-              <div className="w-10 h-10 rounded-xl bg-[#31523D] text-[#D0A73B] flex items-center justify-center shrink-0 font-black text-lg shadow-2xs">
-                📌
-              </div>
-              <div>
-                <span className="text-xs font-extrabold uppercase tracking-wider text-[#31523D] block">
-                  Observação Importante:
-                </span>
-                <p className="text-xs sm:text-sm font-bold text-[#23372B] mt-0.5">
-                  Para realizar o agendamento, selecione o serviço abaixo.
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {activeServices.map((service) => {
-                const isSelected = selectedService?.id === service.id;
-                return (
-                  <div
-                    key={service.id}
-                    id={`service-card-${service.id}`}
-                    onClick={() => setSelectedService(service)}
-                    className={`cursor-pointer rounded-2xl p-4 transition-all border-2 relative ${
-                      isSelected
-                        ? 'border-[#5F6D33] bg-[#EAF0DB]/60 shadow-xs'
-                        : 'border-[#E4EBE4] hover:border-[#9CB55E] bg-white hover:bg-[#F4F7F4]/50'
-                    }`}
+            {/* Service Selector (Compact Dropdown + Details Link) */}
+            <div className="mb-6 bg-[#F4F7F4] p-4 rounded-2xl border border-[#C9D8CB] shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                <label htmlFor="select-booking-service" className="text-xs font-extrabold text-[#23372B] uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-[#D0A73B]" />
+                  <span>Serviço / Tratamento *</span>
+                </label>
+                {onNavigateToServices && (
+                  <button
+                    type="button"
+                    onClick={onNavigateToServices}
+                    className="text-[11px] font-bold text-[#5F6D33] hover:text-[#23372B] hover:underline flex items-center gap-1 self-start sm:self-auto cursor-pointer"
                   >
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
-                      {/* Optional Service Image Illustration */}
-                      {service.imageUrl && (
-                        <div className="relative w-full sm:w-24 h-32 sm:h-24 rounded-xl overflow-hidden shrink-0 border border-[#C9D8CB]/80">
-                          <img
-                            src={getImageUrl(service.imageUrl)}
-                            alt={service.name}
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
-                        </div>
-                      )}
-
-                      {/* Content details */}
-                      <div className="flex-1 pr-2">
-                        <div className="flex items-center space-x-2 mb-1.5">
-                          <span className={`px-2.5 py-0.5 text-[11px] font-bold rounded-md uppercase tracking-wider ${
-                            service.category === 'pilates'
-                              ? 'bg-[#F5EED3] text-[#7E611D] border border-[#D0A73B]/30'
-                              : service.category === 'fisioterapia'
-                              ? 'bg-[#E4EBE4] text-[#31523D] border border-[#769E82]/30'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}>
-                            {service.category}
-                          </span>
-                          <span className="text-xs text-slate-500 font-medium flex items-center space-x-1">
-                            <Clock className="w-3 h-3 text-[#5F6D33]" />
-                            <span>{service.durationMinutes} min</span>
-                          </span>
-                        </div>
-
-                        <h4 className="text-base font-bold text-[#23372B] leading-tight">
-                          {service.name}
-                        </h4>
-                        <p className="text-xs text-slate-600 mt-1 line-clamp-2">
-                          {service.description}
-                        </p>
-                      </div>
-
-                      {/* Price and selector button */}
-                      <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-[#E4EBE4] gap-2">
-                        <div className="text-left sm:text-right">
-                          <span className="text-xs text-slate-400 block font-medium">Investimento</span>
-                          <span className="text-lg font-extrabold text-[#31523D]">
-                            {formatCurrency(service.price)}
-                          </span>
-                        </div>
-                        
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedService(service);
-                            setStep(2);
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                          }}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 shadow-2xs ${
-                            isSelected
-                              ? 'bg-[#31523D] text-[#F5EED3] border border-[#D0A73B]/40'
-                              : 'bg-[#5F6D33] text-white hover:bg-[#4A5629]'
-                          }`}
-                        >
-                          <span>{isSelected ? 'Selecionado ✓' : 'Escolher Horário'}</span>
-                          <ChevronRight className="w-3.5 h-3.5 text-[#D0A73B]" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-6 pt-4 border-t border-slate-100 flex justify-end">
-              <button
-                id="btn-step1-next"
-                onClick={handleNextStep}
-                className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-bold text-sm bg-[#31523D] hover:bg-[#23372B] text-white shadow-md flex items-center justify-center space-x-2 transition-all cursor-pointer"
-              >
-                <span>Clique aqui e garanta seu horário ({selectedService?.name || 'Selecione acima'})</span>
-                <ChevronRight className="w-4 h-4 text-[#D0A73B]" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 2: DATE & TIME SELECTION */}
-        {step === 2 && (
-          <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-[#C9D8CB]">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#E4EBE4]">
-              <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded-xl overflow-hidden border border-[#D0A73B] shrink-0 bg-[#23372B]">
-                  <img
-                    src="/src/assets/images/fisiolys_logo_brand_1785780140781.jpg"
-                    alt="Logo Fisiolys"
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div>
-                  <span className="text-xs text-slate-500 font-medium">Programa Selecionado:</span>
-                  <p className="text-sm font-bold text-[#31523D]">{selectedService?.name}</p>
-                </div>
+                    <span>Ver todos os tratamentos em detalhes</span>
+                    <ExternalLink className="w-3 h-3 text-[#D0A73B]" />
+                  </button>
+                )}
               </div>
-              <button
-                onClick={() => setStep(1)}
-                className="text-xs text-[#5F6D33] hover:underline font-bold bg-[#F4F7F4] px-2.5 py-1 rounded-lg border border-[#C9D8CB]"
+
+              <select
+                id="select-booking-service"
+                value={selectedService?.id || ''}
+                onChange={(e) => {
+                  const s = activeServices.find((srv) => srv.id === e.target.value);
+                  if (s) setSelectedService(s);
+                }}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#C9D8CB] bg-white text-[#23372B] font-bold text-sm focus:ring-2 focus:ring-[#5F6D33] focus:border-[#5F6D33] shadow-2xs cursor-pointer"
               >
-                Alterar Serviço
-              </button>
+                {activeServices.map((srv) => (
+                  <option key={srv.id} value={srv.id}>
+                    {srv.name} — {formatCurrency(srv.price)} {getInvestmentTypeLabel(srv.category)} ({srv.durationMinutes} min)
+                  </option>
+                ))}
+              </select>
+
+              {selectedService && (
+                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#E4EBE4] text-xs">
+                  <div className="flex items-center space-x-2">
+                    <span className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-md uppercase tracking-wider ${
+                      selectedService.category === 'pilates'
+                        ? 'bg-[#F5EED3] text-[#7E611D] border border-[#D0A73B]/30'
+                        : selectedService.category === 'fisioterapia'
+                        ? 'bg-[#E4EBE4] text-[#31523D] border border-[#769E82]/30'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}>
+                      {selectedService.category}
+                    </span>
+                    <span className="text-slate-600 font-medium flex items-center space-x-1">
+                      <Clock className="w-3 h-3 text-[#5F6D33]" />
+                      <span>{selectedService.durationMinutes} min de atendimento</span>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center space-x-1.5 font-bold">
+                    <span className="text-slate-500 text-[11px]">Investimento {getInvestmentTypeLabel(selectedService.category)}:</span>
+                    <span className="text-sm font-extrabold text-[#31523D]">{formatCurrency(selectedService.price)}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <h3 className="text-lg font-bold text-[#23372B] mb-1">
+            <h4 className="text-base font-bold text-[#23372B] mb-1">
               Escolha a Data e o Horário
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-500 mb-5">
-              Selecione o dia desejado para filtrar os horários livres.
+            </h4>
+            <p className="text-xs text-slate-500 mb-5">
+              Selecione o dia desejado abaixo para ver os horários disponíveis.
             </p>
 
             {/* Date Selection Section: Quick Chips + Calendar */}
@@ -1028,32 +846,23 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
               </div>
             )}
 
-            {/* Step 2 Actions */}
-            <div className="mt-8 pt-4 border-t border-[#E4EBE4] flex items-center justify-between">
+            {/* Step 1 Actions */}
+            <div className="mt-8 pt-4 border-t border-[#E4EBE4] flex items-center justify-end">
               <button
-                type="button"
-                onClick={handlePrevStep}
-                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 flex items-center space-x-1"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span>Voltar</span>
-              </button>
-
-              <button
-                id="btn-step2-next"
+                id="btn-step1-next"
                 disabled={!selectedTime || !selectedDate}
                 onClick={handleNextStep}
-                className="px-6 py-2.5 rounded-xl font-bold text-sm bg-[#31523D] hover:bg-[#23372B] text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-xs flex items-center space-x-2"
+                className="w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-sm bg-[#31523D] hover:bg-[#23372B] text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-xs flex items-center justify-center space-x-2 transition-all cursor-pointer ring-2 ring-[#D0A73B]/50"
               >
-                <span>Avançar para Dados ({selectedTime ? `${selectedTime} hs` : 'Escolha um horário acima'})</span>
+                <span>Avançar para Seus Dados ({selectedTime ? `${selectedTime} hs` : 'Escolha um horário acima'})</span>
                 <ChevronRight className="w-4 h-4 text-[#D0A73B]" />
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 3: PATIENT INFORMATION */}
-        {step === 3 && (
+        {/* STEP 2: PATIENT INFORMATION & PAYMENT */}
+        {step === 2 && (
           <form onSubmit={handleSubmitBooking} className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-[#C9D8CB]">
             <h3 className="text-lg font-bold text-[#23372B] mb-1">
               Seus Dados e Pagamento
@@ -1064,9 +873,14 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
 
             {/* Booking Summary Badge */}
             <div className="bg-[#F4F7F4] border border-[#C9D8CB] rounded-xl p-4 mb-5 space-y-1.5 text-xs text-[#23372B]">
-              <div className="flex justify-between font-bold text-sm text-[#31523D]">
+              <div className="flex justify-between items-center font-bold text-sm text-[#31523D]">
                 <span>{selectedService?.name}</span>
-                <span className="text-[#9E7F22]">{formatCurrency(selectedService?.price || 0)}</span>
+                <div className="text-right">
+                  <span className="text-[11px] font-bold text-[#5F6D33] mr-1.5 uppercase">
+                    {selectedService ? getInvestmentTypeLabel(selectedService.category) : ''}
+                  </span>
+                  <span className="text-[#9E7F22]">{formatCurrency(selectedService?.price || 0)}</span>
+                </div>
               </div>
               <div className="flex items-center space-x-3 text-[#5F6D33] font-semibold">
                 <span className="flex items-center space-x-1">
@@ -1323,8 +1137,8 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
           </form>
         )}
 
-        {/* STEP 4: CONFIRMATION SCREEN */}
-        {step === 4 && confirmedAppointment && (
+        {/* STEP 3: CONFIRMATION SCREEN */}
+        {step === 3 && confirmedAppointment && (
           <div className="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-[#C9D8CB] text-center">
             
             <div className="w-16 h-16 bg-[#F5EED3] text-[#9E7F22] border border-[#D0A73B]/40 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
@@ -1478,8 +1292,6 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ clinic, services, 
             </div>
 
           </div>
-        )}
-        </>
         )}
 
         {/* App Download QR Code Section */}

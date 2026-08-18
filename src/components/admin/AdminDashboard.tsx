@@ -10,6 +10,7 @@ import { AdminLoyalty } from './AdminLoyalty';
 import { AdminFinancial } from './AdminFinancial';
 import { AdminQRCode } from './AdminQRCode';
 import { AdminWebhook } from './AdminWebhook';
+import { AdminWhatsApp } from './AdminWhatsApp';
 import { AdminToasts } from './AdminToasts';
 import {
   LayoutDashboard,
@@ -559,6 +560,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             >
               <Radio className="w-4 h-4 text-[#D0A73B]" />
               <span>Webhook</span>
+            </button>
+
+            <button
+              id="tab-whatsapp"
+              onClick={() => setActiveTab('whatsapp')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+                activeTab === 'whatsapp'
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4 text-emerald-400" />
+              <span>WhatsApp & Lembretes</span>
             </button>
           </div>
 
@@ -1270,7 +1284,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {/* TAB 5: PATIENTS */}
         {activeTab === 'pacientes' && (
-          <AdminPatients patients={patients} appointments={appointments} onReload={onReload} />
+          <AdminPatients patients={patients} appointments={appointments} clinic={clinic} onReload={onReload} />
         )}
 
         {/* TAB 5.5: FIDELIDADE RECORRENTE R$ 99 */}
@@ -1365,6 +1379,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* TAB 7: WEBHOOK */}
         {activeTab === 'webhook' && (
           <AdminWebhook clinic={clinic} onReload={onReload} />
+        )}
+
+        {/* TAB 8: WHATSAPP & AUTOMATED REMINDERS */}
+        {activeTab === 'whatsapp' && (
+          <AdminWhatsApp clinic={clinic} appointments={appointments} onReload={onReload} />
         )}
 
         {/* MANUAL BOOKING MODAL */}

@@ -17,6 +17,17 @@ export function getPublicAppUrl(customAppUrl?: string): string {
   return origin;
 }
 
+export function getCheckInUrl(customAppUrl?: string, patientPhone?: string): string {
+  const baseUrl = getPublicAppUrl(customAppUrl);
+  const params = new URLSearchParams();
+  params.append('view', 'patient_portal');
+  params.append('action', 'checkin');
+  if (patientPhone) {
+    params.append('phone', patientPhone.replace(/\D/g, ''));
+  }
+  return `${baseUrl}?${params.toString()}`;
+}
+
 export async function generateQRCodeDataUrl(text: string): Promise<string> {
   try {
     const targetUrl = text || getPublicAppUrl();

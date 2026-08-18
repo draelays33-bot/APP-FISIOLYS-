@@ -9,7 +9,8 @@ import {
   ReminderLog,
   Testimonial,
   LoyaltyMember,
-  PaymentMethod
+  PaymentMethod,
+  WhatsAppLog
 } from '../types';
 
 import {
@@ -22,6 +23,14 @@ import {
   initialLoyaltyMembers
 } from '../data/initialData';
 
+import {
+  interpolateWhatsAppTemplate,
+  getWhatsAppDirectUrl,
+  getWhatsAppWebUrl,
+  cleanPhoneNumber,
+  DEFAULT_WHATSAPP_TEMPLATES
+} from '../utils/whatsappUtils';
+
 const STORAGE_KEY = 'fisiolys_local_db_v1';
 
 interface LocalDBData {
@@ -33,6 +42,7 @@ interface LocalDBData {
   reminderLogs: ReminderLog[];
   testimonials: Testimonial[];
   loyaltyMembers: LoyaltyMember[];
+  whatsappLogs: WhatsAppLog[];
 }
 
 function loadLocalData(): LocalDBData {
@@ -49,6 +59,7 @@ function loadLocalData(): LocalDBData {
         reminderLogs: parsed.reminderLogs || [],
         testimonials: parsed.testimonials || initialTestimonials,
         loyaltyMembers: parsed.loyaltyMembers || initialLoyaltyMembers,
+        whatsappLogs: parsed.whatsappLogs || [],
       };
     }
   } catch (err) {
@@ -64,6 +75,7 @@ function loadLocalData(): LocalDBData {
     reminderLogs: [],
     testimonials: initialTestimonials,
     loyaltyMembers: initialLoyaltyMembers,
+    whatsappLogs: [],
   };
   saveLocalData(initialData);
   return initialData;
@@ -224,6 +236,10 @@ export const localDb = {
         available,
         bookedCount,
         maxCapacity,
+        isExclusive: false,
+        hasExclusiveBooking: false,
+        isFull: !available,
+        spotsLeft: Math.max(0, maxCapacity - bookedCount),
         reason,
         statusLabel
       });
@@ -265,9 +281,11 @@ export const localDb = {
       patientEmail: apptData.patientEmail || '',
       serviceId: apptData.serviceId,
       serviceName: service?.name || 'Serviço',
+      servicePrice: service?.price || 0,
+      durationMinutes: service?.durationMinutes || 50,
       date: apptData.date,
       time: apptData.time,
-      status: 'confirmado',
+      status: 'agendado',
       notes: apptData.notes || '',
       paymentMethod: apptData.paymentMethod || 'pix',
       attendanceStatus: 'pendente',
@@ -279,16 +297,17 @@ export const localDb = {
     // Sync patient list
     const existingPatient = data.patients.find(p => p.phone === apptData.patientPhone || (apptData.patientEmail && p.email === apptData.patientEmail));
     if (existingPatient) {
-      existingPatient.totalAppointments += 1;
-      existingPatient.lastAppointmentDate = apptData.date;
+      existingPatient.totalSessions += 1;
+      existingPatient.lastSessionDate = apptData.date;
     } else {
       data.patients.push({
         id: `pat-${Date.now()}`,
         name: apptData.patientName,
         phone: apptData.patientPhone,
         email: apptData.patientEmail || '',
-        totalAppointments: 1,
-        lastAppointmentDate: apptData.date,
+        totalSessions: 1,
+        lastSessionDate: apptData.date,
+        firstSessionDate: apptData.date,
         createdAt: new Date().toISOString()
       });
     }
@@ -337,7 +356,7 @@ export const localDb = {
       appt.status = 'cancelado';
     } else {
       appt.attendanceStatus = 'pendente';
-      appt.status = 'confirmado';
+      appt.status = 'agendado';
     }
 
     if (attendanceNotes) {
@@ -346,6 +365,104 @@ export const localDb = {
 
     saveLocalData(data);
     return appt;
+  },
+
+  checkInPatient(params: {
+    appointmentId?: string;
+    patientPhone?: string;
+    patientName?: string;
+    method?: 'qrcode' | 'totem' | 'portal' | 'manual';
+    notes?: string;
+  }): { success: boolean; appointment: Appointment; message: string; checkedInAt: string } {
+    const data = loadLocalData();
+    const now = new Date();
+    const nowYear = now.getFullYear();
+    const nowMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const nowDate = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${nowYear}-${nowMonth}-${nowDate}`;
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    let targetAppt: Appointment | undefined;
+
+    if (params.appointmentId) {
+      targetAppt = data.appointments.find(a => a.id === params.appointmentId);
+    }
+
+    if (!targetAppt && (params.patientPhone || params.patientName)) {
+      const cleanPhone = (params.patientPhone || '').replace(/\D/g, '');
+      const nameLower = (params.patientName || '').trim().toLowerCase();
+
+      targetAppt = data.appointments.find(a => {
+        const aPhoneClean = a.patientPhone.replace(/\D/g, '');
+        const matchPhone = cleanPhone.length >= 6 && aPhoneClean.includes(cleanPhone);
+        const matchName = nameLower && a.patientName.toLowerCase().includes(nameLower);
+        return (matchPhone || matchName) && a.date === todayStr && a.status !== 'cancelado';
+      });
+
+      if (!targetAppt) {
+        targetAppt = data.appointments.find(a => {
+          const aPhoneClean = a.patientPhone.replace(/\D/g, '');
+          const matchPhone = cleanPhone.length >= 6 && aPhoneClean.includes(cleanPhone);
+          const matchName = nameLower && a.patientName.toLowerCase().includes(nameLower);
+          return (matchPhone || matchName) && a.status !== 'cancelado';
+        });
+      }
+    }
+
+    if (targetAppt) {
+      targetAppt.attendanceStatus = 'presenca';
+      targetAppt.status = 'concluido';
+      targetAppt.checkedInAt = now.toISOString();
+      targetAppt.checkInMethod = params.method || 'qrcode';
+      if (params.notes) {
+        targetAppt.attendanceNotes = targetAppt.attendanceNotes ? `${targetAppt.attendanceNotes} | ${params.notes}` : params.notes;
+      }
+      saveLocalData(data);
+      return {
+        success: true,
+        appointment: targetAppt,
+        message: `Check-in confirmado com sucesso! Seja bem-vindo(a) à Fisiolys, ${targetAppt.patientName}.`,
+        checkedInAt: targetAppt.checkedInAt
+      };
+    }
+
+    // Create walk-in check-in session for today
+    const defaultService = data.services[0] || {
+      id: 'srv-1',
+      name: 'Fisioterapia / Pilates',
+      price: 130,
+      durationMinutes: 50
+    };
+
+    const newCheckInAppt: Appointment = {
+      id: `appt-checkin-${Date.now()}`,
+      patientName: params.patientName || 'Paciente Recepção',
+      patientPhone: params.patientPhone || '(93) 99999-9999',
+      patientEmail: '',
+      serviceId: defaultService.id,
+      serviceName: defaultService.name,
+      servicePrice: defaultService.price,
+      durationMinutes: defaultService.durationMinutes,
+      date: todayStr,
+      time: timeStr,
+      status: 'concluido',
+      attendanceStatus: 'presenca',
+      checkedInAt: now.toISOString(),
+      checkInMethod: params.method || 'qrcode',
+      notes: params.notes || 'Check-in presencial registrado na clínica',
+      paymentMethod: 'presencial',
+      createdAt: now.toISOString()
+    };
+
+    data.appointments.unshift(newCheckInAppt);
+    saveLocalData(data);
+
+    return {
+      success: true,
+      appointment: newCheckInAppt,
+      message: `Check-in presencial confirmado para hoje às ${timeStr}! Seja bem-vindo(a) à Fisiolys.`,
+      checkedInAt: newCheckInAppt.checkedInAt
+    };
   },
 
   getPatientHistory(query: string) {
@@ -358,7 +475,7 @@ export const localDb = {
 
     const totalPresencas = history.filter(a => a.attendanceStatus === 'presenca' || a.status === 'concluido').length;
     const totalFaltas = history.filter(a => a.attendanceStatus === 'falta').length;
-    const totalAgendados = history.filter(a => a.status === 'confirmado' && a.attendanceStatus !== 'presenca' && a.attendanceStatus !== 'falta').length;
+    const totalAgendados = history.filter(a => a.status === 'agendado' && a.attendanceStatus !== 'presenca' && a.attendanceStatus !== 'falta').length;
 
     return {
       found: history.length > 0 || patient !== null,
@@ -402,7 +519,8 @@ export const localDb = {
       treatmentName: testimonialData.treatmentName || 'Tratamento',
       rating: testimonialData.rating,
       comment: testimonialData.comment,
-      createdAt: new Date().toISOString()
+      date: new Date().toISOString().split('T')[0],
+      verified: true
     };
     data.testimonials.unshift(newTestimonial);
     saveLocalData(data);
@@ -461,7 +579,7 @@ export const localDb = {
     throw new Error('Assinante não encontrado');
   },
 
-  recordLoyaltyPayment(id: string, payData: { monthYear?: string; amount?: number; paymentMethod?: string; receiptNotes?: string }): { member: LoyaltyMember } {
+  recordLoyaltyPayment(id: string, payData: { monthYear?: string; amount?: number; paymentMethod?: 'pix' | 'cartao' | 'cartao_recorrente' | 'dinheiro' | 'outro'; receiptNotes?: string }): { member: LoyaltyMember } {
     const data = loadLocalData();
     const member = data.loyaltyMembers.find(m => m.id === id);
     if (!member) throw new Error('Assinante não encontrado');
@@ -474,7 +592,8 @@ export const localDb = {
       monthYear,
       amount,
       paidAt: new Date().toISOString().split('T')[0],
-      paymentMethod: payData.paymentMethod || 'pix'
+      paymentMethod: payData.paymentMethod || 'pix',
+      receiptNotes: payData.receiptNotes
     });
 
     member.accumulatedBalance += amount;
@@ -493,13 +612,9 @@ export const localDb = {
     const member = data.loyaltyMembers.find(m => m.id === id);
     if (!member) throw new Error('Assinante não encontrado');
 
-    member.recurringCardConfig = {
-      cardHolderName: cardData.cardHolderName,
-      lastFourDigits: cardData.cardNumber.slice(-4) || '4242',
-      expiryMonthYear: cardData.cardExpiry,
-      active: true,
-      lastBilledDate: new Date().toISOString().split('T')[0]
-    };
+    member.recurringBilling = true;
+    member.recurringMethod = 'cartao_recorrente';
+    member.cardLast4 = cardData.cardNumber.slice(-4) || '4242';
 
     saveLocalData(data);
     return { member };
@@ -538,7 +653,7 @@ export const localDb = {
           monthYear: `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
           amount: 99,
           paidAt: new Date().toISOString().split('T')[0],
-          paymentMethod: 'cartao_credito'
+          paymentMethod: 'cartao_recorrente'
         }],
         overdueMonths: [],
         notes: 'Assinatura realizada via Cartão Recorrente (Online)',
@@ -547,13 +662,9 @@ export const localDb = {
       data.loyaltyMembers.push(member);
     }
 
-    member.recurringCardConfig = {
-      cardHolderName: subData.cardHolderName,
-      lastFourDigits,
-      expiryMonthYear: subData.cardExpiry,
-      active: true,
-      lastBilledDate: new Date().toISOString().split('T')[0]
-    };
+    member.recurringBilling = true;
+    member.recurringMethod = 'cartao_recorrente';
+    member.cardLast4 = lastFourDigits;
 
     saveLocalData(data);
     return { member };
@@ -578,5 +689,174 @@ export const localDb = {
     const data = loadLocalData();
     data.loyaltyMembers = data.loyaltyMembers.filter(m => m.id !== id);
     saveLocalData(data);
+  },
+
+  // --- WHATSAPP OPERATIONS ---
+  getWhatsAppLogs(): WhatsAppLog[] {
+    const data = loadLocalData();
+    return data.whatsappLogs || [];
+  },
+
+  clearWhatsAppLogs(): void {
+    const data = loadLocalData();
+    data.whatsappLogs = [];
+    saveLocalData(data);
+  },
+
+  sendWhatsAppMessage(params: {
+    appointmentId?: string;
+    type?: 'confirmacao' | 'lembrete_d1' | 'lembrete_d0' | 'manual';
+    customMessage?: string;
+    phoneOverride?: string;
+  }): { success: boolean; status: 'enviado' | 'erro'; details?: string; log: WhatsAppLog; directWebUrl: string; directAppUrl: string; message: string } {
+    const data = loadLocalData();
+    if (!data.whatsappLogs) data.whatsappLogs = [];
+
+    let patientPhone = params.phoneOverride || '';
+    let patientName = 'Paciente';
+    let appt: Appointment | undefined;
+
+    if (params.appointmentId) {
+      appt = data.appointments.find(a => a.id === params.appointmentId);
+      if (appt) {
+        patientPhone = appt.patientPhone;
+        patientName = appt.patientName;
+      }
+    }
+
+    if (!patientPhone) {
+      throw new Error("Telefone do destinatário não informado");
+    }
+
+    let message = params.customMessage;
+    if (!message) {
+      let template = data.clinic.whatsappTemplateBooking || DEFAULT_WHATSAPP_TEMPLATES.bookingConfirmation;
+      if (params.type === 'lembrete_d1') {
+        template = data.clinic.whatsappTemplateD1 || DEFAULT_WHATSAPP_TEMPLATES.reminderD1;
+      } else if (params.type === 'lembrete_d0') {
+        template = data.clinic.whatsappTemplateD0 || DEFAULT_WHATSAPP_TEMPLATES.reminderD0;
+      }
+
+      message = interpolateWhatsAppTemplate(template, {
+        patientName,
+        patientPhone,
+        serviceName: appt?.serviceName || 'Atendimento',
+        servicePrice: appt?.servicePrice,
+        date: appt?.date || new Date().toISOString().split('T')[0],
+        time: appt?.time || '09:00',
+        clinicName: data.clinic.name,
+        managerName: data.clinic.managerName,
+        address: data.clinic.address,
+        city: data.clinic.city,
+        paymentMethod: appt?.paymentMethod
+      });
+    }
+
+    const provider = data.clinic.whatsappProvider || 'whatsapp_web';
+    const log: WhatsAppLog = {
+      id: `wlog-${Date.now()}`,
+      appointmentId: appt?.id,
+      patientName,
+      patientPhone,
+      type: params.type || 'manual',
+      provider,
+      status: 'enviado',
+      message,
+      sentAt: new Date().toISOString(),
+      errorDetails: 'Mensagem formatada com sucesso'
+    };
+
+    data.whatsappLogs.unshift(log);
+
+    if (appt) {
+      appt.whatsappStatus = 'enviado';
+      appt.whatsappSentAt = new Date().toISOString();
+    }
+
+    saveLocalData(data);
+
+    return {
+      success: true,
+      status: 'enviado',
+      details: 'Pronto para envio',
+      log,
+      directWebUrl: getWhatsAppWebUrl(patientPhone, message),
+      directAppUrl: getWhatsAppDirectUrl(patientPhone, message),
+      message
+    };
+  },
+
+  batchSendWhatsAppReminders(date: string, type: 'lembrete_d0' | 'lembrete_d1' = 'lembrete_d0'): {
+    success: boolean;
+    total: number;
+    sent: number;
+    errors: number;
+    date: string;
+    type: string;
+    results: any[];
+  } {
+    const data = loadLocalData();
+    if (!data.whatsappLogs) data.whatsappLogs = [];
+
+    const targetAppts = data.appointments.filter(a => a.date === date && a.status !== 'cancelado');
+    const template = type === 'lembrete_d1'
+      ? (data.clinic.whatsappTemplateD1 || DEFAULT_WHATSAPP_TEMPLATES.reminderD1)
+      : (data.clinic.whatsappTemplateD0 || DEFAULT_WHATSAPP_TEMPLATES.reminderD0);
+
+    const provider = data.clinic.whatsappProvider || 'whatsapp_web';
+    const results: any[] = [];
+
+    for (const appt of targetAppts) {
+      const msg = interpolateWhatsAppTemplate(template, {
+        patientName: appt.patientName,
+        patientPhone: appt.patientPhone,
+        serviceName: appt.serviceName,
+        servicePrice: appt.servicePrice,
+        date: appt.date,
+        time: appt.time,
+        clinicName: data.clinic.name,
+        managerName: data.clinic.managerName,
+        address: data.clinic.address,
+        city: data.clinic.city,
+        paymentMethod: appt.paymentMethod
+      });
+
+      appt.whatsappStatus = 'enviado';
+      appt.whatsappSentAt = new Date().toISOString();
+
+      const log: WhatsAppLog = {
+        id: `wlog-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        appointmentId: appt.id,
+        patientName: appt.patientName,
+        patientPhone: appt.patientPhone,
+        type,
+        provider,
+        status: 'enviado',
+        message: msg,
+        sentAt: new Date().toISOString()
+      };
+
+      data.whatsappLogs.unshift(log);
+      results.push({
+        appointmentId: appt.id,
+        patientName: appt.patientName,
+        phone: appt.patientPhone,
+        time: appt.time,
+        status: 'enviado',
+        directWebUrl: getWhatsAppWebUrl(appt.patientPhone, msg)
+      });
+    }
+
+    saveLocalData(data);
+
+    return {
+      success: true,
+      total: targetAppts.length,
+      sent: targetAppts.length,
+      errors: 0,
+      date,
+      type,
+      results
+    };
   }
 };

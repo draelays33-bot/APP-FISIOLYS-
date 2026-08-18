@@ -1,4 +1,4 @@
-import { ClinicConfig, Service, ScheduleConfig, Appointment, Patient, AppointmentStatus, SlotInfo, ReminderLog, Testimonial, LoyaltyMember, PaymentMethod } from '../types';
+import { ClinicConfig, Service, ScheduleConfig, Appointment, Patient, AppointmentStatus, SlotInfo, ReminderLog, Testimonial, LoyaltyMember, PaymentMethod, WhatsAppLog } from '../types';
 import { localDb } from './localDb';
 
 // Helper function to attempt API request, and fallback to localDb if server is offline or on static hosting (like Netlify)
@@ -153,6 +153,24 @@ export const api = {
     ).then(res => (res as any).appointment || res);
   },
 
+  async checkInPatient(params: {
+    appointmentId?: string;
+    patientPhone?: string;
+    patientName?: string;
+    method?: 'qrcode' | 'totem' | 'portal' | 'manual';
+    notes?: string;
+  }): Promise<{ success: boolean; appointment: Appointment; message: string; checkedInAt: string }> {
+    return fetchOrFallback(
+      '/api/check-in',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      },
+      () => localDb.checkInPatient(params)
+    );
+  },
+
   async getPatientHistory(query: string): Promise<{
     found: boolean;
     patient: Patient | null;
@@ -194,7 +212,7 @@ export const api = {
         body: JSON.stringify({ url }),
       },
       async () => {
-        if (!url) return { success: false, error: 'URL do Webhook não fornecida' };
+        if (!url) return { success: false, error: 'URL do Webhook não fornecida', payloadSent: null };
         try {
           await fetch(url, {
             method: 'POST',
@@ -203,7 +221,7 @@ export const api = {
           });
           return { success: true, payloadSent: { event: 'teste_webhook' } };
         } catch (e: any) {
-          return { success: false, error: e.message || 'Falha ao disparar webhook' };
+          return { success: false, error: e.message || 'Falha ao disparar webhook', payloadSent: null };
         }
       }
     );
@@ -268,7 +286,7 @@ export const api = {
     ).then(res => (res as any).member || res);
   },
 
-  async recordLoyaltyPayment(id: string, data: { monthYear?: string; amount?: number; paymentMethod?: string; receiptNotes?: string }): Promise<{ member: LoyaltyMember }> {
+  async recordLoyaltyPayment(id: string, data: { monthYear?: string; amount?: number; paymentMethod?: 'pix' | 'cartao' | 'cartao_recorrente' | 'dinheiro' | 'outro'; receiptNotes?: string }): Promise<{ member: LoyaltyMember }> {
     return fetchOrFallback(
       `/api/loyalty/${id}/payment`,
       {
@@ -321,6 +339,84 @@ export const api = {
       `/api/loyalty/${id}`,
       { method: 'DELETE' },
       () => localDb.deleteLoyaltyMember(id)
+    );
+  },
+
+  // WhatsApp Operations
+  async getWhatsAppLogs(): Promise<WhatsAppLog[]> {
+    return fetchOrFallback('/api/whatsapp/logs', undefined, () => localDb.getWhatsAppLogs());
+  },
+
+  async clearWhatsAppLogs(): Promise<void> {
+    return fetchOrFallback(
+      '/api/whatsapp/logs',
+      { method: 'DELETE' },
+      () => localDb.clearWhatsAppLogs()
+    );
+  },
+
+  async sendWhatsAppMessage(params: {
+    appointmentId?: string;
+    type?: 'confirmacao' | 'lembrete_d1' | 'lembrete_d0' | 'manual';
+    customMessage?: string;
+    phoneOverride?: string;
+  }): Promise<{ success: boolean; status: 'enviado' | 'erro'; details?: string; log: WhatsAppLog; directWebUrl: string; directAppUrl: string; message: string }> {
+    return fetchOrFallback(
+      '/api/whatsapp/send',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      },
+      () => localDb.sendWhatsAppMessage(params)
+    );
+  },
+
+  async batchSendWhatsAppReminders(date: string, type: 'lembrete_d0' | 'lembrete_d1' = 'lembrete_d0'): Promise<{
+    success: boolean;
+    total: number;
+    sent: number;
+    errors: number;
+    date: string;
+    type: string;
+    results: any[];
+  }> {
+    return fetchOrFallback(
+      '/api/whatsapp/batch-reminders',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, type }),
+      },
+      () => localDb.batchSendWhatsAppReminders(date, type)
+    );
+  },
+
+  async testWhatsApp(params: {
+    phone: string;
+    message?: string;
+    provider?: string;
+    apiUrl?: string;
+    apiToken?: string;
+  }): Promise<{ success: boolean; status: string; details?: string; phone: string; text: string; directWebUrl: string; directAppUrl: string }> {
+    return fetchOrFallback(
+      '/api/whatsapp/test',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      },
+      async () => {
+        return {
+          success: true,
+          status: 'enviado',
+          details: 'Teste simulado localmente',
+          phone: params.phone,
+          text: params.message || 'Teste WhatsApp',
+          directWebUrl: `https://web.whatsapp.com/send?phone=${params.phone.replace(/\D/g, '')}&text=${encodeURIComponent(params.message || 'Teste')}`,
+          directAppUrl: `https://wa.me/${params.phone.replace(/\D/g, '')}?text=${encodeURIComponent(params.message || 'Teste')}`
+        };
+      }
     );
   }
 };

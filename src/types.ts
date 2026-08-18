@@ -45,12 +45,33 @@ export interface Appointment {
   status: AppointmentStatus;
   attendanceStatus?: 'presenca' | 'falta' | 'pendente';
   attendanceNotes?: string;
+  checkedInAt?: string;
+  checkInMethod?: 'qrcode' | 'totem' | 'portal' | 'manual';
   paymentMethod?: PaymentMethod;
   notes?: string;
   createdAt: string;
   webhookSent?: boolean;
   reminderSent4h?: boolean;
   reminderSentAt?: string;
+  whatsappStatus?: 'pendente' | 'enviado' | 'entregue' | 'lido' | 'falha' | 'erro';
+  whatsappSentAt?: string;
+  whatsappMessageId?: string;
+  whatsappError?: string;
+}
+
+export type WhatsAppProvider = 'whatsapp_web' | 'meta_cloud' | 'zapi' | 'evolution' | 'custom_webhook';
+
+export interface WhatsAppLog {
+  id: string;
+  appointmentId?: string;
+  patientName: string;
+  patientPhone: string;
+  type: 'confirmacao' | 'lembrete_d1' | 'lembrete_d0' | 'manual' | 'teste';
+  provider: string;
+  status: 'enviado' | 'erro' | 'aberto_web';
+  message: string;
+  sentAt: string;
+  errorDetails?: string;
 }
 
 export interface ReminderLog {
@@ -106,10 +127,21 @@ export interface ClinicConfig {
   logoUrl?: string;
   googleReviewUrl?: string;
   customAppUrl?: string;
+  // WhatsApp Integration & Automation Settings
+  whatsappProvider?: WhatsAppProvider;
+  whatsappApiUrl?: string;
+  whatsappApiToken?: string;
+  whatsappInstanceId?: string;
+  whatsappAutoSendBooking?: boolean;
+  whatsappAutoSendReminderD1?: boolean;
+  whatsappAutoSendReminderD0?: boolean;
+  whatsappTemplateBooking?: string;
+  whatsappTemplateD1?: string;
+  whatsappTemplateD0?: string;
 }
 
-export type AppView = 'public' | 'admin';
-export type AdminTab = 'dashboard' | 'agenda' | 'servicos' | 'horarios' | 'pacientes' | 'fidelidade' | 'financeiro' | 'qrcode' | 'webhook';
+export type AppView = 'public' | 'services' | 'patient_portal' | 'admin';
+export type AdminTab = 'dashboard' | 'agenda' | 'servicos' | 'horarios' | 'pacientes' | 'fidelidade' | 'financeiro' | 'qrcode' | 'webhook' | 'whatsapp';
 
 export type LoyaltyStatus = 'ativo' | 'inativo' | 'inadimplente';
 

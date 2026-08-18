@@ -1,4 +1,4 @@
-import { Service, ScheduleConfig, ClinicConfig, Appointment, Patient, Testimonial, LoyaltyMember } from '../types';
+import { Service, ScheduleConfig, ClinicConfig, Appointment, Patient, Testimonial, LoyaltyMember, WhatsAppLog } from '../types';
 
 export const initialClinicConfig: ClinicConfig = {
   name: "Fisiolys Fisioterapia e Pilates",
@@ -12,6 +12,47 @@ export const initialClinicConfig: ClinicConfig = {
   webhookEnabled: true,
   googleReviewUrl: "https://www.google.com/search?q=Fisiolys+Fisioterapia+e+Pilates+Altamira+Avaliar+no+Google",
   customAppUrl: "",
+  // WhatsApp Integration & Automation Defaults
+  whatsappProvider: "whatsapp_web",
+  whatsappApiUrl: "",
+  whatsappApiToken: "",
+  whatsappInstanceId: "fisiolys-main",
+  whatsappAutoSendBooking: true,
+  whatsappAutoSendReminderD1: true,
+  whatsappAutoSendReminderD0: true,
+  whatsappTemplateBooking: `Olá *{paciente}*! 💚✨
+
+Seu agendamento na *{clinica}* foi registrado com sucesso!
+
+📋 *Tratamento:* {servico}
+📅 *Data:* {data}
+⏰ *Horário:* {horario} hs
+💰 *Investimento:* {valor}
+📍 *Endereço:* {endereco} - {cidade}
+🗺️ *Rota no Google Maps:* {maps_link}
+
+{instrucoes_chegada}
+
+Estamos ansiosos para cuidar do seu bem-estar! Se precisar de qualquer ajuste, responda esta mensagem. 🌿`,
+  whatsappTemplateD1: `Olá *{paciente}*! Tudo bem? 🌸
+
+Lembrete carinhoso do seu atendimento de *{servico}* agendado para *amanhã* na *{clinica}*:
+
+📅 *Data:* {data} (Amanhã)
+⏰ *Horário:* {horario} hs
+📍 *Local:* {endereco}
+🗺️ *Localização:* {maps_link}
+
+Por favor, responda com *CONFIRMAR* para mantermos seu horário reservado com a *{responsavel}*. Caso precise remarcar, nos avise com antecedência. 💚`,
+  whatsappTemplateD0: `Olá *{paciente}*! Bom dia! ☀️✨
+
+Passando para lembrar que o seu atendimento de *{servico}* na *{clinica}* é *HOJE*:
+
+⏰ *Horário:* {horario} hs
+📍 *Local:* {endereco} - {cidade}
+🗺️ *Ver no Mapa:* {maps_link}
+
+Recomendamos chegar com 5 a 10 minutos de antecedência. Estamos te aguardando com muito carinho! 🌿`
 };
 
 export const initialServices: Service[] = [
@@ -28,7 +69,7 @@ export const initialServices: Service[] = [
   },
   {
     id: "serv-1",
-    name: "Pilates Clássico - 8 sessões por mês",
+    name: "MAT Solo - 8 sessões por mês",
     description: "Programa mensal no solo e aparelhos com 8 sessões por mês (2x por semana). Trabalho de postura, alongamento e fortalecimento.",
     durationMinutes: 50,
     price: 99,
@@ -38,7 +79,7 @@ export const initialServices: Service[] = [
   },
   {
     id: "serv-2",
-    name: "Pilates Clássico - 12 sessões por mês",
+    name: "MAT Solo - 12 sessões por mês",
     description: "Programa mensal no solo e aparelhos com 12 sessões (3x/semana). Ganho de força, flexibilidade e consciência corporal.",
     durationMinutes: 50,
     price: 189,

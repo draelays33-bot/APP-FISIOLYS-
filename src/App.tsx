@@ -1,19 +1,54 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AppView, ClinicConfig, Service, ScheduleConfig, Appointment, Patient } from './types';
+import { AppView, ClinicConfig, Service, ScheduleConfig, Appointment, Patient, LoyaltyMember } from './types';
 import { api } from './services/api';
 import { Header } from './components/Header';
 import { PublicBooking } from './components/public/PublicBooking';
+import { ServicesCatalogView } from './components/public/ServicesCatalogView';
+import { PatientPortal } from './components/patient/PatientPortal';
 import { AdminDashboard } from './components/admin/AdminDashboard';
-import { RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
+import { RefreshCw, AlertCircle, Sparkles, Lock, Shield } from 'lucide-react';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<AppView>('public');
+  const [currentView, setCurrentView] = useState<AppView>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const viewParam = urlParams.get('view');
+        if (viewParam === 'admin') {
+          return 'admin';
+        }
+        if (viewParam === 'patient_portal' || viewParam === 'gestao' || viewParam === 'frequencia') {
+          return 'patient_portal';
+        }
+        if (viewParam === 'services' || viewParam === 'servicos' || viewParam === 'tratamentos') {
+          return 'services';
+        }
+        if (viewParam === 'public' || viewParam === 'agendamento') {
+          return 'public';
+        }
+      }
+    } catch (e) {
+      console.error("Error reading URL parameters", e);
+    }
+    return 'public';
+  });
 
   const [clinic, setClinic] = useState<ClinicConfig | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [schedule, setSchedule] = useState<ScheduleConfig | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [loyaltyMembers, setLoyaltyMembers] = useState<LoyaltyMember[]>([]);
+  const [preselectedService, setPreselectedService] = useState<Service | null>(null);
+
+  // Password Authentication State for Admin Panel
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('fisiolys_admin_auth') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,12 +56,13 @@ export default function App() {
   const loadData = useCallback(async () => {
     try {
       setError(null);
-      const [clinicRes, servicesRes, scheduleRes, apptsRes, patientsRes] = await Promise.all([
+      const [clinicRes, servicesRes, scheduleRes, apptsRes, patientsRes, loyaltyRes] = await Promise.all([
         api.getClinic(),
         api.getServices(),
         api.getScheduleConfig(),
         api.getAppointments(),
         api.getPatients(),
+        api.getLoyaltyMembers().catch(() => []),
       ]);
 
       setClinic(clinicRes);
@@ -34,6 +70,7 @@ export default function App() {
       setSchedule(scheduleRes);
       setAppointments(apptsRes);
       setPatients(patientsRes);
+      setLoyaltyMembers(loyaltyRes);
     } catch (err: any) {
       console.error("Error loading application data:", err);
       setError("Não foi possível carregar os dados da clínica. Verifique se o servidor está ativo.");
@@ -45,6 +82,33 @@ export default function App() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const handleAdminLoginSuccess = () => {
+    try {
+      sessionStorage.setItem('fisiolys_admin_auth', 'true');
+    } catch (e) {
+      console.error(e);
+    }
+    setIsAdminAuthenticated(true);
+  };
+
+  const handleAdminLogout = () => {
+    try {
+      sessionStorage.removeItem('fisiolys_admin_auth');
+    } catch (e) {
+      console.error(e);
+    }
+    setIsAdminAuthenticated(false);
+    setCurrentView('patient_portal');
+  };
+
+  const handleViewChange = (view: AppView) => {
+    if (view === 'admin' && !isAdminAuthenticated) {
+      // The Header component handles opening the password modal
+      return;
+    }
+    setCurrentView(view);
+  };
 
   if (loading) {
     return (
@@ -81,30 +145,85 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#F7F8F3] text-slate-800 font-sans antialiased selection:bg-[#F5EED3] selection:text-[#7E611D]">
       
-      {/* Top Header */}
+      {/* Top Header with 3 Tabs & Password Modal */}
       <Header
         currentView={currentView}
-        onViewChange={setCurrentView}
+        onViewChange={handleViewChange}
         clinic={clinic}
+        isAdminAuthenticated={isAdminAuthenticated}
+        onAdminLoginSuccess={handleAdminLoginSuccess}
+        onAdminLogout={handleAdminLogout}
       />
 
       {/* Main View Area */}
       <main>
-        {currentView === 'public' ? (
+        {currentView === 'public' && (
           <PublicBooking
             clinic={clinic}
             services={services}
+            initialService={preselectedService}
             onBookingSuccess={loadData}
+            onNavigateToServices={() => {
+              setCurrentView('services');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
           />
-        ) : (
-          <AdminDashboard
+        )}
+
+        {currentView === 'services' && (
+          <ServicesCatalogView
             clinic={clinic}
             services={services}
-            schedule={schedule}
+            onSelectServiceToBook={(service) => {
+              setPreselectedService(service);
+              setCurrentView('public');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
+        )}
+
+        {currentView === 'patient_portal' && (
+          <PatientPortal
+            clinic={clinic}
+            services={services}
             appointments={appointments}
             patients={patients}
+            loyaltyMembers={loyaltyMembers}
+            onNavigateToBooking={() => {
+              setPreselectedService(null);
+              setCurrentView('public');
+            }}
             onReload={loadData}
           />
+        )}
+
+        {currentView === 'admin' && (
+          isAdminAuthenticated ? (
+            <AdminDashboard
+              clinic={clinic}
+              services={services}
+              schedule={schedule}
+              appointments={appointments}
+              patients={patients}
+              onReload={loadData}
+            />
+          ) : (
+            <div className="max-w-md mx-auto my-20 p-8 bg-white rounded-3xl border border-[#D0A73B]/40 shadow-xl text-center space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-[#31523D] text-[#D0A73B] flex items-center justify-center mx-auto shadow-md">
+                <Lock className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-extrabold text-slate-900">Acesso Restrito ao Painel Gestor</h2>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Esta área exige a senha de segurança da administração (<strong>011809</strong>).
+              </p>
+              <button
+                onClick={() => setCurrentView('patient_portal')}
+                className="px-5 py-2.5 bg-[#31523D] hover:bg-[#23372B] text-white font-bold rounded-xl text-xs transition-all shadow-xs"
+              >
+                Ir para Gestão do Paciente
+              </button>
+            </div>
+          )
         )}
       </main>
 
