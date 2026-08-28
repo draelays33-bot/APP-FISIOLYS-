@@ -2,18 +2,19 @@ import QRCode from 'qrcode';
 
 export function getPublicAppUrl(customAppUrl?: string): string {
   if (customAppUrl && customAppUrl.trim().length > 0) {
-    return customAppUrl.trim();
+    let url = customAppUrl.trim().replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(url)) {
+      url = `https://${url}`;
+    }
+    return url;
   }
   if (typeof window === 'undefined') return 'https://fisiolys.app';
   
-  const origin = window.location.origin;
-  
-  // Se estiver executando no ambiente interno 'ais-dev-', converte automaticamente para o link público 'ais-pre-'
-  // Isso impede que a tela de "Action required to load your app" (bloqueio de cookie) apareça ao ler pelo celular.
+  let origin = window.location.origin;
+  // Convert development preview host to public shared host (ais-pre-) so iPhone camera scans without authentication restrictions
   if (origin.includes('ais-dev-')) {
-    return origin.replace('ais-dev-', 'ais-pre-');
+    origin = origin.replace('ais-dev-', 'ais-pre-');
   }
-  
   return origin;
 }
 
@@ -21,6 +22,7 @@ export function getCheckInUrl(customAppUrl?: string, patientPhone?: string): str
   const baseUrl = getPublicAppUrl(customAppUrl);
   const params = new URLSearchParams();
   params.append('view', 'patient_portal');
+  params.append('tab', 'checkin');
   params.append('action', 'checkin');
   if (patientPhone) {
     params.append('phone', patientPhone.replace(/\D/g, ''));
@@ -28,16 +30,22 @@ export function getCheckInUrl(customAppUrl?: string, patientPhone?: string): str
   return `${baseUrl}?${params.toString()}`;
 }
 
+/**
+ * Generates an ultra-crisp, high-contrast QR Code Data URL optimized for instant smartphone camera scanning.
+ * - Uses pure black #000000 on #FFFFFF for maximum optical contrast (21:1 ratio)
+ * - Uses standard ISO 4-module quiet zone margin for foolproof edge detection
+ * - Uses Error Correction 'M' (15%) to maintain large, clear module size rather than dense microscopic dots
+ */
 export async function generateQRCodeDataUrl(text: string): Promise<string> {
   try {
     const targetUrl = text || getPublicAppUrl();
     const url = await QRCode.toDataURL(targetUrl, {
-      width: 600,
-      margin: 2,
-      errorCorrectionLevel: 'H',
+      width: 1000,
+      margin: 4,
+      errorCorrectionLevel: 'M',
       color: {
-        dark: '#1B2B22', // Verde escuro de alto contraste para leitura instantânea na câmera
-        light: '#ffffff',
+        dark: '#000000', // Pure black for 100% camera readability
+        light: '#ffffff', // Pure white background
       },
     });
     return url;
@@ -86,34 +94,42 @@ export function generateWhatsAppMessage(params: {
   clinicName: string;
   patientName: string;
   serviceName: string;
-  servicePrice: number;
+  servicePrice?: number;
   date: string;
   time: string;
   address: string;
   paymentMethod?: string;
+  planScheduleSummary?: string;
+  frequencyLabel?: string;
 }): string {
   const dateFormatted = formatDatePtBR(params.date);
-  const priceFormatted = formatCurrency(params.servicePrice);
   const mapUrl = getClinicMapUrl(params.address);
 
   const paymentText = params.paymentMethod === 'pix' 
     ? 'PIX (Chave WhatsApp/E-mail)' 
     : params.paymentMethod === 'card_link' 
     ? 'Cartão de Crédito/Débito (Link Online)' 
+    : params.paymentMethod === 'cartao_recorrente'
+    ? 'Cartão Recorrente Mensal'
     : 'Presencial na Recepção';
 
-  const text = `Olá! Gostaria de confirmar meu agendamento na *${params.clinicName}*:
+  const scheduleLine = params.planScheduleSummary 
+    ? `🗓️ *Frequência / Dias Escolhidos:* ${params.planScheduleSummary}\n📅 *Data de Início:* ${dateFormatted}`
+    : `📅 *Data:* ${dateFormatted}\n⏰ *Horário:* ${params.time} hs`;
 
-📋 *Serviço:* ${params.serviceName}
-📅 *Data:* ${dateFormatted}
-⏰ *Horário:* ${params.time} hs
+  const text = `Olá! Gostaria de confirmar minha solicitação de agendamento na *${params.clinicName}*:
+
+📋 *Tratamento / Serviço:* ${params.serviceName}
+${scheduleLine}
 👤 *Paciente:* ${params.patientName}
-💰 *Valor:* ${priceFormatted}
 💳 *Forma de Pagamento:* ${paymentText}
 📍 *Local:* ${params.address}
 🗺️ *Ver no Mapa:* ${mapUrl}
 
-Aguardo a confirmação do horário. Obrigado(a)!`;
+⚖️ *Normas Éticas:* Condições e plano informados na Avaliação Fisioterapêutica (CREFITO-12).
+
+Aguardo a confirmação do agendamento. Muito obrigado(a)! 🌿💚`;
 
   return encodeURIComponent(text);
 }
+

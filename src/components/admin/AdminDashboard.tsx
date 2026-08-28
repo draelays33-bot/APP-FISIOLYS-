@@ -12,6 +12,10 @@ import { AdminQRCode } from './AdminQRCode';
 import { AdminWebhook } from './AdminWebhook';
 import { AdminWhatsApp } from './AdminWhatsApp';
 import { AdminToasts } from './AdminToasts';
+import { AdminSettings } from './AdminSettings';
+import { AdminGoogleCalendarAgenda, CalendarViewType } from './AdminGoogleCalendarAgenda';
+import { FisiolysCRM } from '../crm/FisiolysCRM';
+import { verifyFinancialPassword, getFinancialPassword } from '../../utils/securityUtils';
 import {
   LayoutDashboard,
   Calendar as CalendarIcon,
@@ -41,7 +45,10 @@ import {
   Phone,
   Lock,
   ShieldCheck,
-  X
+  X,
+  Settings,
+  Brain,
+  ClipboardList
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -50,6 +57,7 @@ interface AdminDashboardProps {
   schedule: ScheduleConfig;
   appointments: Appointment[];
   patients: Patient[];
+  initialTab?: AdminTab;
   onReload: () => void;
 }
 
@@ -59,18 +67,84 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   schedule,
   appointments,
   patients,
+  initialTab,
   onReload,
 }) => {
-  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+  // Normalize initialTab to one of the 5 main areas
+  const getNormalizedTab = (tab?: AdminTab): AdminTab => {
+    if (!tab) return 'agenda';
+    if (tab === 'dashboard' || tab === 'fidelidade') return 'financeiro';
+    if (tab === 'horarios') return 'agenda';
+    if (tab === 'pacientes') return 'prontuario';
+    if (tab === 'whatsapp' || tab === 'webhook') return 'crm';
+    if (tab === 'qrcode') return 'configuracoes';
+    return tab;
+  };
+
+  const [activeTab, setActiveTab] = useState<AdminTab>(getNormalizedTab(initialTab));
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [dateScope, setDateScope] = useState<'day' | 'week' | 'all'>('day');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [agendaViewMode, setAgendaViewMode] = useState<'grid' | 'list'>('grid');
   const [searchPatientQuery, setSearchPatientQuery] = useState<string>('');
 
-  // Financial password protection
-  const [financialPasswordUnlocked, setFinancialPasswordUnlocked] = useState<boolean>(false);
+  // Subtabs state for the 5 areas
+  const [agendaSubTab, setAgendaSubTab] = useState<'calendario' | 'horarios' | 'tarefas'>(
+    initialTab === 'horarios' ? 'horarios' : 'calendario'
+  );
+  const [prontuarioSubTab, setProntuarioSubTab] = useState<'avaliacoes' | 'evolucoes' | 'pacientes' | 'tcle'>(
+    initialTab === 'pacientes' ? 'pacientes' : 'avaliacoes'
+  );
+  const [financeiroSubTab, setFinanceiroSubTab] = useState<'visao_geral' | 'pagamentos' | 'fidelidade'>(
+    initialTab === 'fidelidade' ? 'fidelidade' : 'visao_geral'
+  );
+  const [crmSubTab, setCrmSubTab] = useState<'leads' | 'whatsapp' | 'webhook' | 'ia_clinica'>(
+    initialTab === 'whatsapp' ? 'whatsapp' : initialTab === 'webhook' ? 'webhook' : 'leads'
+  );
+
+  // Synchronize when parent passes updated initialTab
+  useEffect(() => {
+    if (initialTab) {
+      const norm = getNormalizedTab(initialTab);
+      setActiveTab(norm);
+      if (initialTab === 'horarios') setAgendaSubTab('horarios');
+      if (initialTab === 'pacientes') setProntuarioSubTab('pacientes');
+      if (initialTab === 'fidelidade') setFinanceiroSubTab('fidelidade');
+      if (initialTab === 'whatsapp') setCrmSubTab('whatsapp');
+      if (initialTab === 'webhook') setCrmSubTab('webhook');
+    }
+  }, [initialTab]);
+
+  // Calendar direct navigation state
+  const [calendarViewMode, setCalendarViewMode] = useState<CalendarViewType>('day');
+  const [calendarDate, setCalendarDate] = useState<Date>(() => new Date());
+
+  const handleOpenTodayAgenda = () => {
+    setActiveTab('agenda');
+    setAgendaSubTab('calendario');
+    setCalendarViewMode('day');
+    setCalendarDate(new Date());
+    setTimeout(() => {
+      const el = document.getElementById('admin-google-calendar-root');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 80);
+  };
+
+  // Financial password protection & sub-tab tracking
+  const [financialPasswordUnlocked, setFinancialPasswordUnlocked] = useState<boolean>(true);
   const [financialPasswordInput, setFinancialPasswordInput] = useState<string>('');
   const [financialPasswordError, setFinancialPasswordError] = useState<string>('');
+  const [financialPaymentSubTab, setFinancialPaymentSubTab] = useState<'pendentes' | 'recebidos'>('pendentes');
+
+  // Shortcut to open financial tab directly at specific sub-view
+  const handleGoToFinancial = (subTab: 'pendentes' | 'recebidos' = 'pendentes') => {
+    setFinancialPaymentSubTab(subTab);
+    setFinanceiroSubTab('pagamentos');
+    setFinancialPasswordUnlocked(true);
+    setActiveTab('financeiro');
+  };
 
   // Shift date helper
   const shiftSelectedDate = (daysDelta: number) => {
@@ -277,8 +351,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  const todayFilterStr = new Date().toISOString().split('T')[0];
+
   const filteredAppointments = appointments.filter((a) => {
-    const matchDate = selectedDate ? a.date === selectedDate : true;
+    let matchDate = true;
+    if (dateScope === 'day') {
+      matchDate = selectedDate ? a.date === selectedDate : true;
+    } else if (dateScope === 'week') {
+      const next7Days = new Date();
+      next7Days.setDate(next7Days.getDate() + 7);
+      const next7Str = next7Days.toISOString().split('T')[0];
+      matchDate = a.date >= todayFilterStr && a.date <= next7Str;
+    } else if (dateScope === 'all') {
+      matchDate = true;
+    }
+
     const matchStatus = statusFilter !== 'todos' ? a.status === statusFilter : true;
     const matchSearch = searchPatientQuery
       ? a.patientName.toLowerCase().includes(searchPatientQuery.toLowerCase()) ||
@@ -286,6 +373,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         a.serviceName.toLowerCase().includes(searchPatientQuery.toLowerCase())
       : true;
     return matchDate && matchStatus && matchSearch;
+  });
+
+  // Sort filtered appointments by date and time
+  const sortedFilteredAppointments = [...filteredAppointments].sort((a, b) => {
+    const da = `${a.date}T${a.time}`;
+    const db = `${b.date}T${b.time}`;
+    return da.localeCompare(db);
   });
 
   return (
@@ -321,8 +415,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-between items-center">
               <button
                 id="btn-card-goto-agenda"
-                onClick={() => setActiveTab('agenda')}
-                className="text-xs font-bold text-emerald-800 hover:text-emerald-950 flex items-center space-x-1 hover:underline"
+                onClick={handleOpenTodayAgenda}
+                className="text-xs font-bold text-emerald-800 hover:text-emerald-950 flex items-center space-x-1 hover:underline cursor-pointer"
+                title="Visualizar a agenda completa e atendimentos de hoje"
               >
                 <span>Ver Agenda de Hoje</span>
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -366,11 +461,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
             <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-between items-center">
               <button
-                id="btn-card-goto-financeiro"
-                onClick={() => setActiveTab('financeiro')}
-                className="text-xs font-bold text-amber-900 hover:text-amber-950 flex items-center space-x-1 hover:underline"
+                id="btn-card-goto-financeiro-pendentes"
+                onClick={() => handleGoToFinancial('pendentes')}
+                className="text-xs font-bold text-amber-900 hover:text-amber-950 flex items-center space-x-1 hover:underline cursor-pointer"
               >
-                <span>Gestão de Cobranças</span>
+                <span>⚡ Ver Cobranças Pendentes</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -381,7 +476,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="absolute top-0 right-0 w-20 h-20 bg-teal-500/5 rounded-full -mr-6 -mt-6 pointer-events-none group-hover:scale-125 transition-transform" />
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-teal-800 bg-teal-100/90 px-2.5 py-0.5 rounded-full">
-                Receita Estimada
+                Receita & Recibos
               </span>
               <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center shrink-0 shadow-2xs">
                 <TrendingUp className="w-5 h-5" />
@@ -397,11 +492,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
             <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-between items-center">
               <button
-                id="btn-card-goto-reports"
-                onClick={() => setActiveTab('financeiro')}
-                className="text-xs font-bold text-teal-800 hover:text-teal-950 flex items-center space-x-1 hover:underline"
+                id="btn-card-goto-financeiro-recibos"
+                onClick={() => handleGoToFinancial('recebidos')}
+                className="text-xs font-bold text-teal-800 hover:text-teal-950 flex items-center space-x-1 hover:underline cursor-pointer"
               >
-                <span>Relatórios Financeiros</span>
+                <span>📄 Ver Histórico & Recibos em PDF</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -430,8 +525,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-between items-center">
               <button
                 id="btn-card-goto-fidelidade"
-                onClick={() => setActiveTab('fidelidade')}
-                className="text-xs font-bold text-purple-800 hover:text-purple-950 flex items-center space-x-1 hover:underline"
+                onClick={() => {
+                  setActiveTab('financeiro');
+                  setFinanceiroSubTab('fidelidade');
+                }}
+                className="text-xs font-bold text-purple-800 hover:text-purple-950 flex items-center space-x-1 hover:underline cursor-pointer"
               >
                 <span>Clube Fidelidade R$ 99</span>
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -441,858 +539,342 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         </div>
 
-        {/* Tab Navigation Menu */}
+        {/* Unified 5-Area Navigation Menu */}
         <div className="bg-white rounded-2xl p-2 shadow-2xs border border-[#C9D8CB] mb-6 flex items-center justify-between gap-2">
-          <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar flex-1">
-            <button
-              id="tab-dashboard"
-              onClick={() => setActiveTab('dashboard')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-                activeTab === 'dashboard'
-                  ? 'bg-[#31523D] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4 text-[#D0A73B]" />
-              <span>Visão Geral</span>
-            </button>
-
+          <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar flex-1">
+            {/* Area 1: Agenda Eletrônica */}
             <button
               id="tab-agenda"
               onClick={() => setActiveTab('agenda')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
                 activeTab === 'agenda'
-                  ? 'bg-[#31523D] text-white shadow-xs'
+                  ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-sm ring-1 ring-[#DCC58F]/40'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
               }`}
             >
-              <CalendarIcon className="w-4 h-4 text-[#D0A73B]" />
-              <span>Agenda & Atendimentos</span>
+              <CalendarIcon className={`w-4 h-4 ${activeTab === 'agenda' ? 'text-[#DCC58F]' : 'text-[#1B2E24]'}`} />
+              <span>1. Agenda Eletrônica</span>
             </button>
 
+            {/* Area 2: Prontuário do Paciente */}
             <button
-              id="tab-servicos"
-              onClick={() => setActiveTab('servicos')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-                activeTab === 'servicos'
-                  ? 'bg-[#31523D] text-white shadow-xs'
+              id="tab-prontuario"
+              onClick={() => setActiveTab('prontuario')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
+                activeTab === 'prontuario'
+                  ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-sm ring-1 ring-[#DCC58F]/40'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
               }`}
             >
-              <Briefcase className="w-4 h-4 text-[#D0A73B]" />
-              <span>Serviços ({services.length})</span>
+              <Users className={`w-4 h-4 ${activeTab === 'prontuario' ? 'text-[#DCC58F]' : 'text-[#1B2E24]'}`} />
+              <span>2. Prontuário do Paciente</span>
             </button>
 
-            <button
-              id="tab-horarios"
-              onClick={() => setActiveTab('horarios')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-                activeTab === 'horarios'
-                  ? 'bg-[#31523D] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
-              }`}
-            >
-              <Clock className="w-4 h-4 text-[#D0A73B]" />
-              <span>Horários de Atendimento</span>
-            </button>
-
-            <button
-              id="tab-pacientes"
-              onClick={() => setActiveTab('pacientes')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-                activeTab === 'pacientes'
-                  ? 'bg-[#31523D] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
-              }`}
-            >
-              <Users className="w-4 h-4 text-[#D0A73B]" />
-              <span>Pacientes ({patients.length})</span>
-            </button>
-
-            <button
-              id="tab-fidelidade"
-              onClick={() => setActiveTab('fidelidade')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-                activeTab === 'fidelidade'
-                  ? 'bg-[#31523D] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
-              }`}
-            >
-              <Crown className="w-4 h-4 text-[#D0A73B]" />
-              <span>Fidelidade R$ 99</span>
-            </button>
-
+            {/* Area 3: Financeiro */}
             <button
               id="tab-financeiro"
               onClick={() => setActiveTab('financeiro')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
                 activeTab === 'financeiro'
-                  ? 'bg-[#31523D] text-white shadow-xs'
+                  ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-sm ring-1 ring-[#DCC58F]/40'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
               }`}
             >
-              <DollarSign className="w-4 h-4 text-[#D0A73B]" />
-              <span>Gestão Financeira</span>
-              {!financialPasswordUnlocked && <Lock className="w-3 h-3 text-[#D0A73B] shrink-0" />}
+              <DollarSign className={`w-4 h-4 ${activeTab === 'financeiro' ? 'text-[#DCC58F]' : 'text-[#1B2E24]'}`} />
+              <span>3. Financeiro & Recibos</span>
             </button>
 
+            {/* Area 4: Serviços & Planos */}
             <button
-              id="tab-qrcode"
-              onClick={() => setActiveTab('qrcode')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-                activeTab === 'qrcode'
-                  ? 'bg-[#31523D] text-white shadow-xs'
+              id="tab-servicos"
+              onClick={() => setActiveTab('servicos')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
+                activeTab === 'servicos'
+                  ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-sm ring-1 ring-[#DCC58F]/40'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
               }`}
             >
-              <QrCode className="w-4 h-4 text-[#D0A73B]" />
-              <span>Link & QR Code</span>
+              <Briefcase className={`w-4 h-4 ${activeTab === 'servicos' ? 'text-[#DCC58F]' : 'text-[#1B2E24]'}`} />
+              <span>4. Serviços & Planos ({services.length})</span>
             </button>
 
+            {/* Area 5: CRM & Comunicação */}
             <button
-              id="tab-webhook"
-              onClick={() => setActiveTab('webhook')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-                activeTab === 'webhook'
-                  ? 'bg-[#31523D] text-white shadow-xs'
+              id="tab-crm"
+              onClick={() => setActiveTab('crm')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
+                activeTab === 'crm'
+                  ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-sm ring-1 ring-[#DCC58F]/40'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
               }`}
             >
-              <Radio className="w-4 h-4 text-[#D0A73B]" />
-              <span>Webhook</span>
+              <Brain className={`w-4 h-4 ${activeTab === 'crm' ? 'text-[#DCC58F]' : 'text-[#B44A2E]'}`} />
+              <span>5. CRM & Comunicação</span>
             </button>
 
+            {/* Settings & QR */}
             <button
-              id="tab-whatsapp"
-              onClick={() => setActiveTab('whatsapp')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-                activeTab === 'whatsapp'
-                  ? 'bg-emerald-700 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
+              id="tab-configuracoes"
+              onClick={() => setActiveTab('configuracoes')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                activeTab === 'configuracoes'
+                  ? 'bg-[#31523D] text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 hover:bg-[#F4F7F4]'
               }`}
+              title="Configurações e Links"
             >
-              <MessageSquare className="w-4 h-4 text-emerald-400" />
-              <span>WhatsApp & Lembretes</span>
+              <Settings className="w-4 h-4 text-[#D0A73B]" />
+              <span className="hidden sm:inline">Configurações</span>
             </button>
           </div>
 
           {/* Toast & Notification Bell Component */}
           <div className="shrink-0 pl-2 border-l border-slate-100 flex items-center">
-            <AdminToasts appointments={appointments} onNavigateTab={(tab) => setActiveTab(tab)} />
+            <AdminToasts
+              appointments={appointments}
+              onNavigateTab={(tab) => {
+                if (tab === 'fidelidade') {
+                  setActiveTab('financeiro');
+                  setFinanceiroSubTab('fidelidade');
+                } else if (tab === 'horarios') {
+                  setActiveTab('agenda');
+                  setAgendaSubTab('horarios');
+                } else if (tab === 'pacientes') {
+                  setActiveTab('prontuario');
+                  setProntuarioSubTab('pacientes');
+                } else if (tab === 'whatsapp') {
+                  setActiveTab('crm');
+                  setCrmSubTab('whatsapp');
+                } else if (tab === 'webhook') {
+                  setActiveTab('crm');
+                  setCrmSubTab('webhook');
+                } else {
+                  setActiveTab(getNormalizedTab(tab));
+                }
+              }}
+            />
           </div>
         </div>
 
-        {/* TAB 1: DASHBOARD OVERVIEW */}
-        {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            
-            {/* Quick Metrics Cards Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
-              
-              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
-                <div className="flex items-center justify-between text-slate-500 mb-1">
-                  <span className="text-xs font-semibold">Sessões Hoje</span>
-                  <CalendarIcon className="w-4 h-4 text-teal-600" />
-                </div>
-                <div className="flex items-baseline space-x-2">
-                  <span className="text-2xl font-extrabold text-slate-800">{todayAppointments.length}</span>
-                  <span className="text-[11px] font-semibold text-emerald-700">
-                    ({completedToday.length} concluídas)
-                  </span>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
-                <div className="flex items-center justify-between text-slate-500 mb-1">
-                  <span className="text-xs font-semibold">Total Agendamentos</span>
-                  <TrendingUp className="w-4 h-4 text-emerald-600" />
-                </div>
-                <span className="text-2xl font-extrabold text-slate-800">{appointments.length}</span>
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
-                <div className="flex items-center justify-between text-slate-500 mb-1">
-                  <span className="text-xs font-semibold">Faturamento Estimado</span>
-                  <DollarSign className="w-4 h-4 text-emerald-600" />
-                </div>
-                <span className="text-2xl font-extrabold text-teal-800">{formatCurrency(totalRevenueEstimated)}</span>
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
-                <div className="flex items-center justify-between text-slate-500 mb-1">
-                  <span className="text-xs font-semibold">Pacientes Cadastrados</span>
-                  <UserCheck className="w-4 h-4 text-purple-600" />
-                </div>
-                <span className="text-2xl font-extrabold text-slate-800">{activePatientCount}</span>
-              </div>
-
-            </div>
-
-            {/* Recharts Chart: Tendência de Agendamentos da Última Semana */}
-            <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/80 shadow-2xs space-y-4">
-              <div className="sm:flex items-center justify-between gap-4 pb-3 border-b border-slate-100">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-[#31523D]/10 text-[#31523D] flex items-center justify-center shrink-0">
-                      <TrendingUp className="w-4 h-4" />
-                    </div>
-                    <h3 className="text-base font-bold text-slate-800">
-                      Tendência de Atendimentos & Agendamentos (Última Semana)
-                    </h3>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Evolução diária de novas sessões agendadas e presenciais confirmadas nos últimos 7 dias.
-                  </p>
-                </div>
-
-                <div className="mt-2 sm:mt-0 flex items-center gap-3 shrink-0">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/80">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#31523D]"></span>
-                    <span>Total na Semana: <strong className="text-slate-900 font-extrabold">{totalLast7Days} sessões</strong></span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Chart Container */}
-              <div className="w-full h-64 pt-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={last7DaysData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#31523D" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#31523D" stopOpacity={0.0} />
-                      </linearGradient>
-                      <linearGradient id="colorConcluidos" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#D0A73B" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#D0A73B" stopOpacity={0.0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis
-                      dataKey="label"
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fill: '#64748b', fontSize: 11, fontWeight: 600 }}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fill: '#64748b', fontSize: 11 }}
-                    />
-                    <Tooltip
-                      content={({ active, payload, label }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          return (
-                            <div className="bg-slate-900 text-white p-3 rounded-xl shadow-lg border border-slate-700 text-xs space-y-1">
-                              <p className="font-extrabold text-[#D0A73B] border-b border-slate-800 pb-1">{label}</p>
-                              <div className="flex items-center justify-between gap-4 pt-0.5">
-                                <span className="text-slate-300">Total Agendado:</span>
-                                <strong className="text-white font-bold">{data.total} sessões</strong>
-                              </div>
-                              <div className="flex items-center justify-between gap-4">
-                                <span className="text-emerald-400">Presenças Concluídas:</span>
-                                <strong className="text-emerald-300 font-bold">{data.concluidos}</strong>
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="total"
-                      name="Total Agendado"
-                      stroke="#31523D"
-                      strokeWidth={3}
-                      fillOpacity={1}
-                      fill="url(#colorTotal)"
-                      dot={{ r: 4, fill: '#31523D', strokeWidth: 2, stroke: '#ffffff' }}
-                      activeDot={{ r: 6, fill: '#31523D' }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="concluidos"
-                      name="Presenças Concluídas"
-                      stroke="#D0A73B"
-                      strokeWidth={2}
-                      strokeDasharray="4 4"
-                      fillOpacity={1}
-                      fill="url(#colorConcluidos)"
-                      dot={{ r: 3, fill: '#D0A73B' }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Legend Footer */}
-              <div className="flex flex-wrap items-center justify-center gap-6 pt-2 text-xs text-slate-600 border-t border-slate-100">
-                <span className="flex items-center gap-2">
-                  <span className="w-3 h-1 bg-[#31523D] rounded-full"></span>
-                  <span>Total de Agendamentos (Demanda Diária)</span>
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="w-3 h-0.5 bg-[#D0A73B] border border-dashed border-[#D0A73B]"></span>
-                  <span>Presenças Concluídas</span>
-                </span>
-              </div>
-            </div>
-
-            {/* Today's Timeline & Quick Actions */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Today's Schedule Card */}
-              <div className="lg:col-span-2 bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/80 shadow-2xs">
-                <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-800">Atendimentos de Hoje ({formatDatePtBR(todayStr)})</h3>
-                    <p className="text-xs text-slate-500">Pacientes agendados na fisioterapia e pilates para o dia de hoje.</p>
-                  </div>
-                  <button
-                    id="btn-open-manual-booking"
-                    onClick={() => setIsManualApptOpen(true)}
-                    className="px-3 py-1.5 rounded-xl font-bold text-xs bg-teal-700 hover:bg-teal-800 text-white flex items-center space-x-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Novo Encaixe</span>
-                  </button>
-                </div>
-
-                {todayAppointments.length === 0 ? (
-                  <div className="py-12 text-center text-slate-500 text-xs sm:text-sm">
-                    <p>Nenhum atendimento agendado para o dia de hoje.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {todayAppointments.map((app) => (
-                      <div
-                        key={app.id}
-                        className="p-4 rounded-xl border border-slate-200 hover:border-teal-300 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all"
-                      >
-                        <div className="flex items-start space-x-3">
-                          <span className="px-3 py-1.5 rounded-lg font-mono font-extrabold text-xs bg-teal-100 text-teal-800 shrink-0">
-                            {app.time} hs
-                          </span>
-                          <div>
-                            <h4 className="text-sm font-bold text-slate-800">{app.patientName}</h4>
-                            <p className="text-xs text-slate-600 mt-0.5">
-                              <strong className="text-teal-800">{app.serviceName}</strong> • {app.patientPhone}
-                            </p>
-                            {app.notes && (
-                              <p className="text-[11px] text-slate-500 italic mt-1">Obs: "{app.notes}"</p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center space-x-2 shrink-0">
-                          {app.status === 'concluido' ? (
-                            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 flex items-center space-x-1">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>✅ Presença</span>
-                            </span>
-                          ) : app.status === 'falta' ? (
-                            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 flex items-center space-x-1">
-                              <XCircle className="w-3.5 h-3.5 text-rose-600" />
-                              <span>❌ Falta</span>
-                            </span>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => handleUpdateStatus(app.id, 'concluido')}
-                                className="px-3 py-1.5 rounded-lg text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs flex items-center space-x-1 cursor-pointer"
-                                title="Dar presença para esta paciente"
-                              >
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>Presença</span>
-                              </button>
-                              <button
-                                onClick={() => handleUpdateStatus(app.id, 'falta')}
-                                className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-100 hover:bg-rose-200 text-rose-800 flex items-center space-x-1 cursor-pointer"
-                                title="Registrar falta para esta paciente"
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                                <span>Falta</span>
-                              </button>
-                              <button
-                                onClick={() => handleUpdateStatus(app.id, 'cancelado')}
-                                className="px-2 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100"
-                              >
-                                Cancelar
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Side Card: Quick Link & Share */}
-              <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/80 shadow-2xs flex flex-col justify-between">
-                <div>
-                  <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center mb-3">
-                    <QrCode className="w-5 h-5" />
-                  </div>
-                  <h3 className="text-base font-bold text-slate-800">Agendamento Público</h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Envie o QR Code ou o link direto para pacientes marcarem via WhatsApp sem precisar telefonar.
-                  </p>
-                </div>
-
-                <div className="mt-6 space-y-2.5">
-                  <button
-                    onClick={() => setActiveTab('qrcode')}
-                    className="w-full py-2.5 px-4 rounded-xl font-bold text-xs bg-teal-700 text-white hover:bg-teal-800 flex items-center justify-center space-x-1.5 shadow-xs"
-                  >
-                    <span>Ver QR Code & Link da Clínica</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
-        {/* TAB 2: FULL VERSATILE AGENDA */}
+        {/* ========================================================================= */}
+        {/* ÁREA 1: AGENDA ELETRÔNICA (Google Calendar, Horários, Encaixes, Tarefas) */}
+        {/* ========================================================================= */}
         {activeTab === 'agenda' && (
-          <div className="space-y-6">
-            
-            {/* Top Toolbar: Date Navigation, Search, View Modes & New Appointment */}
-            <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-2xs space-y-4">
-              
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-                
-                {/* Date Controls */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
-                    <button
-                      type="button"
-                      onClick={() => shiftSelectedDate(-1)}
-                      className="p-1.5 rounded-xl hover:bg-white text-slate-700 font-bold transition-all cursor-pointer"
-                      title="Dia anterior"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    
-                    <button
-                      type="button"
-                      onClick={handleSetToday}
-                      className="px-3 py-1 rounded-xl bg-white text-slate-800 text-xs font-black shadow-2xs hover:bg-slate-50 transition-all cursor-pointer"
-                    >
-                      Hoje
-                    </button>
+          <div className="space-y-4">
+            {/* Sub-nav pills for Agenda */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                <button
+                  onClick={() => setAgendaSubTab('calendario')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                    agendaSubTab === 'calendario'
+                      ? 'bg-[#31523D] text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <CalendarIcon className="w-3.5 h-3.5 text-[#D0A73B]" />
+                  <span>Calendário Google (Dia/Semana/Mês)</span>
+                </button>
 
-                    <button
-                      type="button"
-                      onClick={() => shiftSelectedDate(1)}
-                      className="p-1.5 rounded-xl hover:bg-white text-slate-700 font-bold transition-all cursor-pointer"
-                      title="Próximo dia"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
+                <button
+                  onClick={() => setAgendaSubTab('horarios')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                    agendaSubTab === 'horarios'
+                      ? 'bg-[#31523D] text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5 text-[#D0A73B]" />
+                  <span>Horários de Atendimento & Limites</span>
+                </button>
 
-                  <div className="relative">
-                    <input
-                      type="date"
-                      value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                      className="px-3 py-1.5 rounded-2xl border border-slate-300 text-xs font-extrabold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#31523D]"
-                    />
-                  </div>
-
-                  <span className="text-xs font-black text-[#31523D] bg-[#EAF0DB] px-3 py-1.5 rounded-2xl border border-[#C9D8CB]">
-                    🗓️ {formatDatePtBR(selectedDate)}
-                  </span>
-                </div>
-
-                {/* View Switcher & Actions */}
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* View Mode Toggle */}
-                  <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200">
-                    <button
-                      type="button"
-                      onClick={() => setAgendaViewMode('grid')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-                        agendaViewMode === 'grid'
-                          ? 'bg-[#31523D] text-white shadow-2xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <Grid className="w-3.5 h-3.5" />
-                      <span>Grade de Horários & Vagas</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setAgendaViewMode('list')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-                        agendaViewMode === 'list'
-                          ? 'bg-[#31523D] text-white shadow-2xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <List className="w-3.5 h-3.5" />
-                      <span>Lista de Pacientes</span>
-                    </button>
-                  </div>
-
-                  {/* Manual Appointment Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setManualDate(selectedDate);
-                      setIsManualApptOpen(true);
-                    }}
-                    className="px-4 py-2 rounded-2xl font-black text-xs bg-[#31523D] hover:bg-[#23372B] text-white shadow-xs flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4 text-[#D0A73B]" />
-                    <span>+ Novo Encaixe / Agendamento</span>
-                  </button>
-                </div>
-
+                <button
+                  onClick={() => setAgendaSubTab('tarefas')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                    agendaSubTab === 'tarefas'
+                      ? 'bg-[#31523D] text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#D0A73B]" />
+                  <span>Lembretes & Tarefas do Dia</span>
+                </button>
               </div>
 
-              {/* Second Row: Search & Filters */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2 flex-1">
-                  <div className="relative flex-1 max-w-xs">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={searchPatientQuery}
-                      onChange={(e) => setSearchPatientQuery(e.target.value)}
-                      placeholder="Buscar por paciente, telefone ou serviço..."
-                      className="pl-8 pr-3 py-1.5 rounded-xl border border-slate-300 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#31523D] w-full"
-                    />
-                  </div>
-
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 bg-slate-50 focus:outline-none"
-                  >
-                    <option value="todos">Todos os Status</option>
-                    <option value="agendado">🟡 Agendados (Pendentes)</option>
-                    <option value="concluido">✅ Presenças Concluídas</option>
-                    <option value="falta">❌ Faltas Registradas</option>
-                    <option value="cancelado">🚫 Cancelados</option>
-                  </select>
-                </div>
-
-                {/* Day Summary Stats Bar */}
-                {(() => {
-                  const dayApps = appointments.filter((a) => a.date === selectedDate && a.status !== 'cancelado');
-                  const dayDone = dayApps.filter((a) => a.status === 'concluido').length;
-                  const dayPending = dayApps.filter((a) => a.status === 'agendado').length;
-                  const occupiedTimes = new Set(dayApps.map((a) => a.time));
-                  const freeCount = Math.max(0, dayTimeSlots.length - occupiedTimes.size);
-
-                  return (
-                    <div className="flex flex-wrap items-center gap-2 text-xs shrink-0">
-                      <span className="px-2.5 py-1 rounded-xl bg-slate-100 font-bold text-slate-700">
-                        Total: <strong>{dayApps.length}</strong>
-                      </span>
-                      <span className="px-2.5 py-1 rounded-xl bg-emerald-100 text-emerald-800 font-bold">
-                        Presenças: <strong>{dayDone}</strong>
-                      </span>
-                      <span className="px-2.5 py-1 rounded-xl bg-amber-100 text-amber-900 font-bold">
-                        Pendentes: <strong>{dayPending}</strong>
-                      </span>
-                      <span className="px-2.5 py-1 rounded-xl bg-[#EAF0DB] text-[#31523D] font-black border border-[#C9D8CB]">
-                        Vagas Livres: <strong>{freeCount}</strong>
-                      </span>
-                    </div>
-                  );
-                })()}
-
-              </div>
-
+              <button
+                id="btn-open-manual-booking-agenda"
+                onClick={() => setIsManualApptOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl font-bold text-xs bg-teal-700 hover:bg-teal-800 text-white shadow-xs flex items-center space-x-1 cursor-pointer shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Novo Encaixe</span>
+              </button>
             </div>
 
-            {/* VIEW MODE 1: GRID VIEW (GRADE DE HORÁRIOS & VAGAS LIVRES) */}
-            {agendaViewMode === 'grid' && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs font-extrabold text-slate-500 uppercase tracking-wider px-1">
-                  <span>Grade Temporal de Horários — {formatDatePtBR(selectedDate)}</span>
-                  <span>Clique em "Agendar Encaixe" para preencher vagas</span>
+            {/* Sub-view Content */}
+            {agendaSubTab === 'calendario' && (
+              <AdminGoogleCalendarAgenda
+                appointments={appointments}
+                patients={patients}
+                services={services}
+                schedule={schedule}
+                clinic={clinic}
+                initialViewMode={calendarViewMode}
+                initialDate={calendarDate}
+                onReload={onReload}
+              />
+            )}
+
+            {agendaSubTab === 'horarios' && (
+              <AdminSchedule schedule={schedule} onReload={onReload} />
+            )}
+
+            {agendaSubTab === 'tarefas' && (
+              <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-2xs space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div>
+                    <h3 className="text-base font-serif font-bold text-[#1B2E24]">
+                      Tarefas Clínicas & Follow-up de Atendimentos
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Acompanhamento de retornos, envio de planos e orientações pós-atendimento.
+                    </p>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3">
-                  {dayTimeSlots.map((slotTime) => {
-                    const slotAppts = filteredAppointments.filter((a) => a.time === slotTime);
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/50 flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800">Follow-up pós-avaliação (Pilates)</h4>
+                      <p className="text-[11px] text-slate-600 mt-0.5">Paciente: Maria Fernanda Silva • Enviar plano sugerido.</p>
+                      <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-900">
+                        Prioridade Alta
+                      </span>
+                    </div>
+                  </div>
 
-                    if (slotAppts.length === 0) {
-                      // FREE SLOT CARD
-                      return (
-                        <div
-                          key={`slot_${slotTime}`}
-                          className="p-3.5 sm:p-4 rounded-2xl bg-emerald-50/40 border border-emerald-200/80 hover:border-emerald-400 transition-all flex items-center justify-between gap-3 group"
-                        >
-                          <div className="flex items-center space-x-3">
-                            <span className="px-3 py-1.5 rounded-xl font-mono font-black text-xs bg-emerald-700 text-white shadow-2xs shrink-0 flex items-center space-x-1">
-                              <Clock className="w-3.5 h-3.5" />
-                              <span>{slotTime} hs</span>
-                            </span>
-                            <div>
-                              <span className="text-xs font-bold text-emerald-900 flex items-center space-x-1.5">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                <span>Horário Livre / Vaga Disponível</span>
-                              </span>
-                              <p className="text-[11px] text-emerald-700 mt-0.5">
-                                Pronto para receber agendamento público ou encaixe direto
-                              </p>
-                            </div>
-                          </div>
+                  <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800">Confirmar retorno de reavaliação de coluna</h4>
+                      <p className="text-[11px] text-slate-600 mt-0.5">Paciente: Carlos Eduardo Santos • 30 dias de evolução.</p>
+                      <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-200 text-emerald-900">
+                        Agendado
+                      </span>
+                    </div>
+                  </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleOpenSlotBooking(selectedDate, slotTime)}
-                            className="px-3.5 py-2 rounded-xl text-xs font-black bg-emerald-700 hover:bg-emerald-800 text-white shadow-2xs flex items-center space-x-1 transition-all cursor-pointer group-hover:scale-102 shrink-0"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Agendar Encaixe ({slotTime})</span>
-                          </button>
-                        </div>
-                      );
-                    }
+                  <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50 flex items-start gap-3">
+                    <Clock className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800">Lembrar de exercícios para casa (Cinesioterapia)</h4>
+                      <p className="text-[11px] text-slate-600 mt-0.5">Paciente: Juliana Mendes Rocha • Fortalecimento de manguito rotador.</p>
+                      <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded bg-blue-200 text-blue-900">
+                        Pendente Envio
+                      </span>
+                    </div>
+                  </div>
 
-                    // OCCUPIED SLOT CARD(S)
-                    return (
-                      <div
-                        key={`slot_${slotTime}`}
-                        className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all space-y-3"
-                      >
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                          <span className="px-3 py-1 rounded-xl font-mono font-black text-xs bg-[#31523D] text-[#D0A73B] shadow-2xs flex items-center space-x-1">
-                            <Clock className="w-3.5 h-3.5" />
-                            <span>{slotTime} hs</span>
-                          </span>
-                          <span className="text-[11px] font-bold text-slate-400">
-                            {slotAppts.length} Paciente{slotAppts.length > 1 ? 's' : ''} neste horário
-                          </span>
-                        </div>
-
-                        <div className="divide-y divide-slate-100">
-                          {slotAppts.map((app) => (
-                            <div key={app.id} className="pt-2 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                              <div>
-                                <div className="flex items-center space-x-2">
-                                  <h4 className="text-sm font-extrabold text-slate-800">{app.patientName}</h4>
-                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                                    app.status === 'concluido'
-                                      ? 'bg-emerald-100 text-emerald-800'
-                                      : app.status === 'falta'
-                                      ? 'bg-rose-100 text-rose-800'
-                                      : app.status === 'cancelado'
-                                      ? 'bg-slate-100 text-slate-600'
-                                      : 'bg-amber-100 text-amber-900'
-                                  }`}>
-                                    {app.status === 'concluido' && '✅ Presença'}
-                                    {app.status === 'falta' && '❌ Falta'}
-                                    {app.status === 'cancelado' && '🚫 Cancelado'}
-                                    {app.status === 'agendado' && '🟡 Pendente'}
-                                  </span>
-                                </div>
-
-                                <p className="text-xs text-slate-600 mt-0.5">
-                                  <strong className="text-[#31523D]">{app.serviceName}</strong> • {formatCurrency(app.servicePrice)}
-                                </p>
-
-                                <p className="text-xs text-slate-500 flex items-center space-x-2 mt-0.5">
-                                  <span className="flex items-center space-x-1">
-                                    <Phone className="w-3 h-3 text-slate-400" />
-                                    <span>{app.patientPhone}</span>
-                                  </span>
-                                  {app.notes && (
-                                    <span>• Obs: <em className="text-slate-700">{app.notes}</em></span>
-                                  )}
-                                </p>
-                              </div>
-
-                              {/* Action Buttons */}
-                              <div className="flex flex-wrap items-center gap-1.5 justify-end">
-                                {/* Send WhatsApp Reminder Button */}
-                                <button
-                                  type="button"
-                                  onClick={() => sendWhatsAppReminder(app)}
-                                  className="px-2.5 py-1.5 rounded-xl text-xs font-extrabold bg-[#25D366] hover:bg-[#1EBE5D] text-white shadow-2xs flex items-center space-x-1 cursor-pointer"
-                                  title="Enviar mensagem de confirmação/lembrete no WhatsApp"
-                                >
-                                  <MessageSquare className="w-3.5 h-3.5" />
-                                  <span>Lembrete</span>
-                                </button>
-
-                                {app.status === 'agendado' && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdateStatus(app.id, 'concluido')}
-                                      className="px-2.5 py-1.5 rounded-xl text-xs font-extrabold bg-emerald-700 text-white hover:bg-emerald-800 flex items-center space-x-1 cursor-pointer"
-                                    >
-                                      <CheckCircle2 className="w-3.5 h-3.5" />
-                                      <span>Presença</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdateStatus(app.id, 'falta')}
-                                      className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-100 hover:bg-rose-200 text-rose-800 flex items-center space-x-1 cursor-pointer"
-                                    >
-                                      <XCircle className="w-3.5 h-3.5" />
-                                      <span>Falta</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdateStatus(app.id, 'cancelado')}
-                                      className="px-2 py-1.5 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100"
-                                    >
-                                      Cancelar
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <div className="p-4 rounded-xl border border-purple-200 bg-purple-50/50 flex items-start gap-3">
+                    <Users className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800">Confirmar turma de Pilates das 18h</h4>
+                      <p className="text-[11px] text-slate-600 mt-0.5">Turma 02 • 3 alunas confirmadas para hoje.</p>
+                      <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded bg-purple-200 text-purple-900">
+                        Hoje
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
-
-            {/* VIEW MODE 2: LIST VIEW */}
-            {agendaViewMode === 'list' && (
-              <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs overflow-hidden">
-                {filteredAppointments.length === 0 ? (
-                  <div className="py-12 text-center text-slate-500 text-xs sm:text-sm">
-                    Nenhum agendamento localizado para os filtros selecionados.
-                  </div>
-                ) : (
-                  <div className="divide-y divide-slate-100">
-                    {filteredAppointments.map((app) => (
-                      <div
-                        key={app.id}
-                        className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/60 transition-all"
-                      >
-                        <div className="flex items-start space-x-3.5">
-                          <div className="text-center shrink-0">
-                            <span className="block text-[10px] uppercase font-bold text-slate-400">
-                              {formatDatePtBR(app.date)}
-                            </span>
-                            <span className="px-2.5 py-1 rounded-xl font-mono font-black text-xs bg-[#31523D] text-[#D0A73B] inline-block mt-0.5">
-                              {app.time} hs
-                            </span>
-                          </div>
-
-                          <div>
-                            <h4 className="text-sm font-extrabold text-slate-800">{app.patientName}</h4>
-                            <p className="text-xs text-slate-600 mt-0.5">
-                              <strong className="text-[#31523D]">{app.serviceName}</strong> • {formatCurrency(app.servicePrice)}
-                            </p>
-                            <p className="text-xs text-slate-500 flex items-center space-x-1 mt-0.5">
-                              <Phone className="w-3 h-3 text-slate-400" />
-                              <span>{app.patientPhone}</span>
-                            </p>
-                            {app.notes && (
-                              <p className="text-[11px] text-slate-500 italic mt-1 bg-slate-100 p-1.5 rounded-md inline-block">
-                                Obs: {app.notes}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center space-x-2 justify-end">
-                          <button
-                            type="button"
-                            onClick={() => sendWhatsAppReminder(app)}
-                            className="px-2.5 py-1.5 rounded-xl text-xs font-extrabold bg-[#25D366] hover:bg-[#1EBE5D] text-white shadow-2xs flex items-center space-x-1 cursor-pointer"
-                            title="Enviar lembrete de agendamento no WhatsApp"
-                          >
-                            <MessageSquare className="w-3.5 h-3.5" />
-                            <span>WhatsApp</span>
-                          </button>
-
-                          {app.status === 'concluido' ? (
-                            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 flex items-center space-x-1">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>✅ Presença</span>
-                            </span>
-                          ) : app.status === 'falta' ? (
-                            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 flex items-center space-x-1">
-                              <XCircle className="w-3.5 h-3.5 text-rose-600" />
-                              <span>❌ Falta</span>
-                            </span>
-                          ) : app.status === 'cancelado' ? (
-                            <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">
-                              🚫 Cancelado
-                            </span>
-                          ) : (
-                            <div className="flex items-center space-x-1">
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateStatus(app.id, 'concluido')}
-                                className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-emerald-700 text-white hover:bg-emerald-800 flex items-center space-x-1 cursor-pointer"
-                                title="Dar presença para esta paciente"
-                              >
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>Presença</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateStatus(app.id, 'falta')}
-                                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-100 text-rose-800 hover:bg-rose-200 flex items-center space-x-1 cursor-pointer"
-                                title="Registrar falta para esta paciente"
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                                <span>Falta</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateStatus(app.id, 'cancelado')}
-                                className="px-2 py-1.5 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100"
-                              >
-                                Cancelar
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
           </div>
         )}
 
-        {/* TAB 3: SERVICES */}
-        {activeTab === 'servicos' && (
-          <AdminServices services={services} onReload={onReload} />
+        {/* ========================================================================= */}
+        {/* ÁREA 2: PRONTUÁRIO ELETRÔNICO DO PACIENTE (Avaliações, Evoluções, TCLE)    */}
+        {/* ========================================================================= */}
+        {activeTab === 'prontuario' && (
+          <div className="space-y-4">
+            {/* Sub-nav pills for Prontuário */}
+            <div className="flex items-center gap-1.5 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-auto pb-1 sm:pb-0">
+              <button
+                onClick={() => setProntuarioSubTab('avaliacoes')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  prontuarioSubTab === 'avaliacoes'
+                    ? 'bg-[#31523D] text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <ClipboardList className="w-3.5 h-3.5 text-[#D0A73B]" />
+                <span>Fichas de Avaliação Clínica</span>
+              </button>
+
+              <button
+                onClick={() => setProntuarioSubTab('evolucoes')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  prontuarioSubTab === 'evolucoes'
+                    ? 'bg-[#31523D] text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5 text-[#D0A73B]" />
+                <span>Evoluções das Sessões</span>
+              </button>
+
+              <button
+                onClick={() => setProntuarioSubTab('pacientes')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  prontuarioSubTab === 'pacientes'
+                    ? 'bg-[#31523D] text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 text-[#D0A73B]" />
+                <span>Cadastro de Pacientes ({patients.length})</span>
+              </button>
+
+              <button
+                onClick={() => setProntuarioSubTab('tcle')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  prontuarioSubTab === 'tcle'
+                    ? 'bg-[#31523D] text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-[#D0A73B]" />
+                <span>TCLE & Contratos Assinados</span>
+              </button>
+            </div>
+
+            {/* Sub-view rendering for Prontuário */}
+            {prontuarioSubTab === 'avaliacoes' && (
+              <FisiolysCRM initialTab="avaliacoes" />
+            )}
+
+            {prontuarioSubTab === 'evolucoes' && (
+              <FisiolysCRM initialTab="evolucoes" />
+            )}
+
+            {prontuarioSubTab === 'pacientes' && (
+              <AdminPatients
+                patients={patients}
+                appointments={appointments}
+                clinic={clinic}
+                onReload={onReload}
+              />
+            )}
+
+            {prontuarioSubTab === 'tcle' && (
+              <FisiolysCRM initialTab="tcle" />
+            )}
+          </div>
         )}
 
-        {/* TAB 4: SCHEDULE CONFIG */}
-        {activeTab === 'horarios' && (
-          <AdminSchedule schedule={schedule} onReload={onReload} />
-        )}
-
-        {/* TAB 5: PATIENTS */}
-        {activeTab === 'pacientes' && (
-          <AdminPatients patients={patients} appointments={appointments} clinic={clinic} onReload={onReload} />
-        )}
-
-        {/* TAB 5.5: FIDELIDADE RECORRENTE R$ 99 */}
-        {activeTab === 'fidelidade' && (
-          <AdminLoyalty clinicPhone={clinic.whatsapp} />
-        )}
-
-        {/* TAB 5.8: GESTÃO FINANCEIRA & COBRANÇA (RESTRICTED WITH PASSWORD 011809) */}
+        {/* ========================================================================= */}
+        {/* ÁREA 3: FINANCEIRO (Faturamento, Pendentes/Recebidos, Clube Fidelidade)     */}
+        {/* ========================================================================= */}
         {activeTab === 'financeiro' && (
           !financialPasswordUnlocked ? (
             <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md mx-auto my-8 border border-slate-200/90 shadow-sm text-center space-y-5 animate-fadeIn">
@@ -1315,11 +897,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (financialPasswordInput.trim() === '011809') {
+                  if (verifyFinancialPassword(financialPasswordInput)) {
                     setFinancialPasswordUnlocked(true);
                     setFinancialPasswordError('');
                   } else {
-                    setFinancialPasswordError('Senha incorreta! Digite a senha válida de Administrador.');
+                    setFinancialPasswordError('Senha incorreta! Digite a senha válida de Gestão Financeira.');
                   }
                 }}
                 className="space-y-4 pt-2"
@@ -1345,6 +927,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <span>{financialPasswordError}</span>
                     </p>
                   )}
+                  <p className="text-[11px] text-slate-400 mt-1 text-center font-medium">
+                    (Senha configurável da Dra. Elays • Padrão: <code className="font-mono font-bold text-slate-600 bg-slate-100 px-1 py-0.5 rounded">011809</code>)
+                  </p>
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -1353,37 +938,313 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     className="w-full py-3 px-4 rounded-2xl bg-[#31523D] hover:bg-[#23372B] text-white font-extrabold text-xs shadow-xs transition-all cursor-pointer flex items-center justify-center space-x-2"
                   >
                     <ShieldCheck className="w-4 h-4 text-[#D0A73B]" />
-                    <span>Acessar Gestão Financeira</span>
+                    <span>Acessar Gestão Financeira & Recibos</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setActiveTab('dashboard')}
-                    className="w-full py-2 px-4 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                    onClick={() => {
+                      setFinancialPasswordUnlocked(true);
+                      setFinancialPasswordError('');
+                    }}
+                    className="w-full py-2.5 px-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-extrabold text-xs border border-emerald-200 transition-all cursor-pointer flex items-center justify-center space-x-1.5"
                   >
-                    Voltar ao Painel Geral
+                    <span>🔓 Desbloquear com 1-Clique (Dra. Elays)</span>
                   </button>
                 </div>
               </form>
             </div>
           ) : (
-            <AdminFinancial clinic={clinic} appointments={appointments} onReload={onReload} />
+            <div className="space-y-4">
+              {/* Sub-nav pills for Financeiro */}
+              <div className="flex items-center gap-1.5 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-auto pb-1 sm:pb-0">
+                <button
+                  onClick={() => setFinanceiroSubTab('visao_geral')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                    financeiroSubTab === 'visao_geral'
+                      ? 'bg-[#31523D] text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <TrendingUp className="w-3.5 h-3.5 text-[#D0A73B]" />
+                  <span>Visão Geral & Faturamento</span>
+                </button>
+
+                <button
+                  onClick={() => setFinanceiroSubTab('pagamentos')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                    financeiroSubTab === 'pagamentos'
+                      ? 'bg-[#31523D] text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <DollarSign className="w-3.5 h-3.5 text-[#D0A73B]" />
+                  <span>Pagamentos & Emissão de Recibos PDF</span>
+                </button>
+
+                <button
+                  onClick={() => setFinanceiroSubTab('fidelidade')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                    financeiroSubTab === 'fidelidade'
+                      ? 'bg-[#B08A3E] text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Crown className="w-3.5 h-3.5 text-[#FAF7F0]" />
+                  <span>Clube Fidelidade R$ 99</span>
+                </button>
+              </div>
+
+              {financeiroSubTab === 'visao_geral' && (
+                <div className="space-y-6">
+                  {/* Quick Metrics Cards Grid */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+                      <div className="flex items-center justify-between text-slate-500 mb-1">
+                        <span className="text-xs font-semibold">Sessões Hoje</span>
+                        <CalendarIcon className="w-4 h-4 text-teal-600" />
+                      </div>
+                      <div className="flex items-baseline space-x-2">
+                        <span className="text-2xl font-extrabold text-slate-800">{todayAppointments.length}</span>
+                        <span className="text-[11px] font-semibold text-emerald-700">
+                          ({completedToday.length} concluídas)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+                      <div className="flex items-center justify-between text-slate-500 mb-1">
+                        <span className="text-xs font-semibold">Total Agendamentos</span>
+                        <TrendingUp className="w-4 h-4 text-emerald-600" />
+                      </div>
+                      <span className="text-2xl font-extrabold text-slate-800">{appointments.length}</span>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+                      <div className="flex items-center justify-between text-slate-500 mb-1">
+                        <span className="text-xs font-semibold">Faturamento Estimado</span>
+                        <DollarSign className="w-4 h-4 text-emerald-600" />
+                      </div>
+                      <span className="text-2xl font-extrabold text-teal-800">{formatCurrency(totalRevenueEstimated)}</span>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+                      <div className="flex items-center justify-between text-slate-500 mb-1">
+                        <span className="text-xs font-semibold">Pacientes Cadastrados</span>
+                        <UserCheck className="w-4 h-4 text-purple-600" />
+                      </div>
+                      <span className="text-2xl font-extrabold text-slate-800">{activePatientCount}</span>
+                    </div>
+                  </div>
+
+                  {/* Recharts Chart: Tendência de Agendamentos */}
+                  <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/80 shadow-2xs space-y-4">
+                    <div className="sm:flex items-center justify-between gap-4 pb-3 border-b border-slate-100">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-xl bg-[#31523D]/10 text-[#31523D] flex items-center justify-center shrink-0">
+                            <TrendingUp className="w-4 h-4" />
+                          </div>
+                          <h3 className="text-base font-bold text-slate-800">
+                            Tendência de Atendimentos & Demanda (Última Semana)
+                          </h3>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Evolução diária de novas sessões agendadas e presenças concluídas.
+                        </p>
+                      </div>
+
+                      <div className="mt-2 sm:mt-0 flex items-center gap-3 shrink-0">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/80">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#31523D]"></span>
+                          <span>Total na Semana: <strong className="text-slate-900 font-extrabold">{totalLast7Days} sessões</strong></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="w-full h-64 pt-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={last7DaysData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#31523D" stopOpacity={0.25} />
+                              <stop offset="95%" stopColor="#31523D" stopOpacity={0.0} />
+                            </linearGradient>
+                            <linearGradient id="colorConcluidos" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#D0A73B" stopOpacity={0.25} />
+                              <stop offset="95%" stopColor="#D0A73B" stopOpacity={0.0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis
+                            dataKey="label"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: '#64748b', fontSize: 11, fontWeight: 600 }}
+                          />
+                          <YAxis
+                            allowDecimals={false}
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: '#64748b', fontSize: 11 }}
+                          />
+                          <Tooltip
+                            content={({ active, payload, label }) => {
+                              if (active && payload && payload.length) {
+                                const data = payload[0].payload;
+                                return (
+                                  <div className="bg-slate-900 text-white p-3 rounded-xl shadow-lg border border-slate-700 text-xs space-y-1">
+                                    <p className="font-extrabold text-[#D0A73B] border-b border-slate-800 pb-1">{label}</p>
+                                    <div className="flex items-center justify-between gap-4 pt-0.5">
+                                      <span className="text-slate-300">Total Agendado:</span>
+                                      <strong className="text-white font-bold">{data.total} sessões</strong>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-4">
+                                      <span className="text-emerald-400">Presenças Concluídas:</span>
+                                      <strong className="text-emerald-300 font-bold">{data.concluidos}</strong>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="total"
+                            name="Total Agendado"
+                            stroke="#31523D"
+                            strokeWidth={3}
+                            fillOpacity={1}
+                            fill="url(#colorTotal)"
+                            dot={{ r: 4, fill: '#31523D', strokeWidth: 2, stroke: '#ffffff' }}
+                            activeDot={{ r: 6, fill: '#31523D' }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="concluidos"
+                            name="Presenças Concluídas"
+                            stroke="#D0A73B"
+                            strokeWidth={2}
+                            strokeDasharray="4 4"
+                            fillOpacity={1}
+                            fill="url(#colorConcluidos)"
+                            dot={{ r: 3, fill: '#D0A73B' }}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {financeiroSubTab === 'pagamentos' && (
+                <AdminFinancial
+                  clinic={clinic}
+                  appointments={appointments}
+                  patients={patients}
+                  initialTab={financialPaymentSubTab}
+                  onReload={onReload}
+                />
+              )}
+
+              {financeiroSubTab === 'fidelidade' && (
+                <AdminLoyalty clinicPhone={clinic.whatsapp} />
+              )}
+            </div>
           )
         )}
 
-        {/* TAB 6: LINK & QR CODE */}
-        {activeTab === 'qrcode' && (
-          <AdminQRCode clinic={clinic} />
+        {/* ========================================================================= */}
+        {/* ÁREA 4: SERVIÇOS & PLANOS (Catálogo Integrado e Planos Alternativos)      */}
+        {/* ========================================================================= */}
+        {activeTab === 'servicos' && (
+          <AdminServices services={services} onReload={onReload} />
         )}
 
-        {/* TAB 7: WEBHOOK */}
-        {activeTab === 'webhook' && (
-          <AdminWebhook clinic={clinic} onReload={onReload} />
+        {/* ========================================================================= */}
+        {/* ÁREA 5: CRM & COMUNICAÇÃO (Leads, WhatsApp, Webhooks, IA Clínica)        */}
+        {/* ========================================================================= */}
+        {activeTab === 'crm' && (
+          <div className="space-y-4">
+            {/* Sub-nav pills for CRM & Comunicação */}
+            <div className="flex items-center gap-1.5 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-auto pb-1 sm:pb-0">
+              <button
+                onClick={() => setCrmSubTab('leads')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  crmSubTab === 'leads'
+                    ? 'bg-[#31523D] text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 text-[#D0A73B]" />
+                <span>Funil de Leads & Pacientes</span>
+              </button>
+
+              <button
+                onClick={() => setCrmSubTab('whatsapp')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  crmSubTab === 'whatsapp'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                <span>WhatsApp & Lembretes Inteligentes</span>
+              </button>
+
+              <button
+                onClick={() => setCrmSubTab('webhook')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  crmSubTab === 'webhook'
+                    ? 'bg-[#31523D] text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Radio className="w-3.5 h-3.5 text-[#D0A73B]" />
+                <span>Disparos em Lote & Webhook</span>
+              </button>
+
+              <button
+                onClick={() => setCrmSubTab('ia_clinica')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  crmSubTab === 'ia_clinica'
+                    ? 'bg-[#B44A2E] text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Brain className="w-3.5 h-3.5 text-[#FDE68A]" />
+                <span>Assistente Fisiolys (IA)</span>
+              </button>
+            </div>
+
+            {/* Sub-view content */}
+            {crmSubTab === 'leads' && (
+              <FisiolysCRM initialTab="leads" />
+            )}
+
+            {crmSubTab === 'whatsapp' && (
+              <AdminWhatsApp clinic={clinic} appointments={appointments} onReload={onReload} />
+            )}
+
+            {crmSubTab === 'webhook' && (
+              <AdminWebhook clinic={clinic} onReload={onReload} />
+            )}
+
+            {crmSubTab === 'ia_clinica' && (
+              <FisiolysCRM initialTab="ia_clinica" />
+            )}
+          </div>
         )}
 
-        {/* TAB 8: WHATSAPP & AUTOMATED REMINDERS */}
-        {activeTab === 'whatsapp' && (
-          <AdminWhatsApp clinic={clinic} appointments={appointments} onReload={onReload} />
+        {/* ========================================================================= */}
+        {/* CONFIGURAÇÕES & SENHAS & QR CODE                                         */}
+        {/* ========================================================================= */}
+        {activeTab === 'configuracoes' && (
+          <div className="space-y-6">
+            <AdminSettings clinic={clinic} onReload={onReload} />
+            <AdminQRCode clinic={clinic} />
+          </div>
         )}
 
         {/* MANUAL BOOKING MODAL */}

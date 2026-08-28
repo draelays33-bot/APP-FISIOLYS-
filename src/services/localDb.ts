@@ -10,7 +10,9 @@ import {
   Testimonial,
   LoyaltyMember,
   PaymentMethod,
-  WhatsAppLog
+  WhatsAppLog,
+  FrequencyType,
+  WeeklyDaySchedule
 } from '../types';
 
 import {
@@ -264,12 +266,20 @@ export const localDb = {
   createAppointment(apptData: {
     patientName: string;
     patientPhone: string;
+    patientBirthDate?: string;
     patientEmail?: string;
+    patientAddress?: string;
+    patientCity?: string;
+    patientCpf?: string;
     serviceId: string;
     date: string;
     time: string;
     notes?: string;
     paymentMethod?: PaymentMethod;
+    frequencyType?: FrequencyType;
+    selectedDaysSchedule?: WeeklyDaySchedule[];
+    planScheduleSummary?: string;
+    multipleDates?: { date: string; time: string }[];
   }): { appointment: Appointment; webhookSent: boolean } {
     const data = loadLocalData();
     const service = data.services.find(s => s.id === apptData.serviceId);
@@ -279,14 +289,22 @@ export const localDb = {
       patientName: apptData.patientName,
       patientPhone: apptData.patientPhone,
       patientEmail: apptData.patientEmail || '',
+      patientBirthDate: apptData.patientBirthDate || undefined,
+      patientAddress: apptData.patientAddress || undefined,
+      patientCity: apptData.patientCity || undefined,
+      patientCpf: apptData.patientCpf || undefined,
       serviceId: apptData.serviceId,
       serviceName: service?.name || 'Serviço',
       servicePrice: service?.price || 0,
       durationMinutes: service?.durationMinutes || 50,
       date: apptData.date,
       time: apptData.time,
+      frequencyType: apptData.frequencyType || 'sessao_unica',
+      selectedDaysSchedule: apptData.selectedDaysSchedule,
+      planScheduleSummary: apptData.planScheduleSummary,
+      multipleDates: apptData.multipleDates,
       status: 'agendado',
-      notes: apptData.notes || '',
+      notes: apptData.notes || (apptData.planScheduleSummary ? `Plano/Frequência: ${apptData.planScheduleSummary}` : ''),
       paymentMethod: apptData.paymentMethod || 'pix',
       attendanceStatus: 'pendente',
       createdAt: new Date().toISOString()
@@ -294,17 +312,26 @@ export const localDb = {
 
     data.appointments.push(newAppt);
 
-    // Sync patient list
+    // Sync patient list with all registration fields
     const existingPatient = data.patients.find(p => p.phone === apptData.patientPhone || (apptData.patientEmail && p.email === apptData.patientEmail));
     if (existingPatient) {
       existingPatient.totalSessions += 1;
       existingPatient.lastSessionDate = apptData.date;
+      if (apptData.patientBirthDate && !existingPatient.birthDate) existingPatient.birthDate = apptData.patientBirthDate;
+      if (apptData.patientEmail && !existingPatient.email) existingPatient.email = apptData.patientEmail;
+      if (apptData.patientAddress && !existingPatient.address) existingPatient.address = apptData.patientAddress;
+      if (apptData.patientCity && !existingPatient.city) existingPatient.city = apptData.patientCity;
+      if (apptData.patientCpf && !existingPatient.cpf) existingPatient.cpf = apptData.patientCpf;
     } else {
       data.patients.push({
         id: `pat-${Date.now()}`,
         name: apptData.patientName,
         phone: apptData.patientPhone,
         email: apptData.patientEmail || '',
+        birthDate: apptData.patientBirthDate || undefined,
+        address: apptData.patientAddress || undefined,
+        city: apptData.patientCity || 'Altamira - PA',
+        cpf: apptData.patientCpf || undefined,
         totalSessions: 1,
         lastSessionDate: apptData.date,
         firstSessionDate: apptData.date,
@@ -338,6 +365,48 @@ export const localDb = {
     appt.status = status;
     if (notes !== undefined) appt.notes = notes;
     if (attendanceStatus !== undefined) appt.attendanceStatus = attendanceStatus;
+
+    saveLocalData(data);
+    return appt;
+  },
+
+  updateAppointmentDetails(id: string, updates: Partial<Appointment>): Appointment {
+    const data = loadLocalData();
+    const appt = data.appointments.find(a => a.id === id);
+    if (!appt) throw new Error('Agendamento não encontrado');
+
+    if (updates.date !== undefined) appt.date = updates.date;
+    if (updates.time !== undefined) appt.time = updates.time;
+    if (updates.serviceId !== undefined) {
+      appt.serviceId = updates.serviceId;
+      const serv = data.services.find(s => s.id === updates.serviceId);
+      if (serv) {
+        appt.serviceName = serv.name;
+        appt.servicePrice = serv.price;
+      }
+    }
+    if (updates.serviceName !== undefined) appt.serviceName = updates.serviceName;
+    if (updates.servicePrice !== undefined) appt.servicePrice = Number(updates.servicePrice);
+    if (updates.patientName !== undefined) appt.patientName = updates.patientName;
+    if (updates.patientPhone !== undefined) appt.patientPhone = updates.patientPhone;
+    if (updates.patientCpf !== undefined) appt.patientCpf = updates.patientCpf;
+    if (updates.notes !== undefined) appt.notes = updates.notes;
+    if (updates.status !== undefined) {
+      appt.status = updates.status;
+      if (updates.status === 'concluido') {
+        appt.attendanceStatus = 'presenca';
+      } else if (updates.status === 'falta') {
+        appt.attendanceStatus = 'falta';
+      }
+    }
+    if (updates.attendanceStatus !== undefined) {
+      appt.attendanceStatus = updates.attendanceStatus;
+      if (updates.attendanceStatus === 'presenca') {
+        appt.status = 'concluido';
+      } else if (updates.attendanceStatus === 'falta') {
+        appt.status = 'falta';
+      }
+    }
 
     saveLocalData(data);
     return appt;
@@ -496,9 +565,52 @@ export const localDb = {
     saveLocalData(data);
   },
 
+  rescheduleAppointment(id: string, newDate: string, newTime: string, reason?: string): Appointment {
+    const data = loadLocalData();
+    const appt = data.appointments.find(a => a.id === id);
+    if (!appt) throw new Error('Agendamento não encontrado');
+
+    const oldDate = appt.date;
+    const oldTime = appt.time;
+    appt.date = newDate;
+    appt.time = newTime;
+    appt.status = 'agendado';
+    appt.attendanceStatus = 'pendente';
+    const noteMsg = `Remarcado de ${oldDate} às ${oldTime} para ${newDate} às ${newTime}${reason ? ` (Motivo: ${reason})` : ''}`;
+    appt.notes = appt.notes ? `${appt.notes} | ${noteMsg}` : noteMsg;
+
+    saveLocalData(data);
+    return appt;
+  },
+
   getPatients(): Patient[] {
     const data = loadLocalData();
     return data.patients;
+  },
+
+  deletePatient(id: string, deleteAppointments = false): void {
+    const data = loadLocalData();
+    const patientToDelete = data.patients.find(p => p.id === id);
+    if (!patientToDelete) return;
+
+    data.patients = data.patients.filter(p => p.id !== id);
+    if (deleteAppointments) {
+      data.appointments = data.appointments.filter(
+        a => a.patientPhone !== patientToDelete.phone && a.patientName.toLowerCase() !== patientToDelete.name.toLowerCase()
+      );
+    }
+    saveLocalData(data);
+  },
+
+  updatePatient(id: string, update: Partial<Patient>): Patient {
+    const data = loadLocalData();
+    const idx = data.patients.findIndex(p => p.id === id);
+    if (idx !== -1) {
+      data.patients[idx] = { ...data.patients[idx], ...update };
+      saveLocalData(data);
+      return data.patients[idx];
+    }
+    throw new Error('Paciente não encontrado');
   },
 
   getReminderLogs(): ReminderLog[] {
@@ -856,6 +968,143 @@ export const localDb = {
       errors: 0,
       date,
       type,
+      results
+    };
+  },
+
+  batchSendWhatsAppReminders2h(appointmentIds?: string[]): {
+    success: boolean;
+    total: number;
+    sent: number;
+    errors: number;
+    results: any[];
+  } {
+    const data = loadLocalData();
+    if (!data.whatsappLogs) data.whatsappLogs = [];
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    let targetAppts = data.appointments.filter(a => a.date === todayStr && a.status === 'agendado');
+
+    if (Array.isArray(appointmentIds) && appointmentIds.length > 0) {
+      targetAppts = targetAppts.filter(a => appointmentIds.includes(a.id));
+    }
+
+    const template = data.clinic.whatsappTemplateReminder2h || DEFAULT_WHATSAPP_TEMPLATES.reminder2h;
+    const provider = data.clinic.whatsappProvider || 'whatsapp_web';
+    const results: any[] = [];
+
+    for (const appt of targetAppts) {
+      const msg = interpolateWhatsAppTemplate(template, {
+        patientName: appt.patientName,
+        patientPhone: appt.patientPhone,
+        serviceName: appt.serviceName,
+        servicePrice: appt.servicePrice,
+        date: appt.date,
+        time: appt.time,
+        clinicName: data.clinic.name,
+        managerName: data.clinic.managerName,
+        address: data.clinic.address,
+        city: data.clinic.city,
+        paymentMethod: appt.paymentMethod
+      });
+
+      const log: WhatsAppLog = {
+        id: `wlog-2h-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        appointmentId: appt.id,
+        patientName: appt.patientName,
+        patientPhone: appt.patientPhone,
+        type: 'manual',
+        provider,
+        status: 'enviado',
+        message: msg,
+        sentAt: new Date().toISOString()
+      };
+
+      data.whatsappLogs.unshift(log);
+      results.push({
+        appointmentId: appt.id,
+        patientName: appt.patientName,
+        phone: appt.patientPhone,
+        time: appt.time,
+        status: 'enviado',
+        directWebUrl: getWhatsAppWebUrl(appt.patientPhone, msg)
+      });
+    }
+
+    saveLocalData(data);
+
+    return {
+      success: true,
+      total: targetAppts.length,
+      sent: targetAppts.length,
+      errors: 0,
+      results
+    };
+  },
+
+  sendBirthdayReminders(): {
+    success: boolean;
+    total: number;
+    sent: number;
+    errors: number;
+    results: any[];
+  } {
+    const data = loadLocalData();
+    if (!data.whatsappLogs) data.whatsappLogs = [];
+
+    const now = new Date();
+    const monthDay = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    const birthdayPatients = data.patients.filter(p => {
+      if (!p.birthDate) return false;
+      return p.birthDate.slice(5) === monthDay;
+    });
+
+    const template = data.clinic.whatsappTemplateBirthday || DEFAULT_WHATSAPP_TEMPLATES.birthday;
+    const provider = data.clinic.whatsappProvider || 'whatsapp_web';
+    const results: any[] = [];
+
+    for (const patient of birthdayPatients) {
+      const msg = interpolateWhatsAppTemplate(template, {
+        patientName: patient.name,
+        patientPhone: patient.phone,
+        serviceName: 'Fisioterapia & Pilates',
+        date: now.toISOString().split('T')[0],
+        time: '09:00',
+        clinicName: data.clinic.name,
+        managerName: data.clinic.managerName,
+        address: data.clinic.address,
+        city: data.clinic.city,
+      });
+
+      const log: WhatsAppLog = {
+        id: `wlog-bday-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        patientName: patient.name,
+        patientPhone: patient.phone,
+        type: 'manual',
+        provider,
+        status: 'enviado',
+        message: msg,
+        sentAt: new Date().toISOString()
+      };
+
+      data.whatsappLogs.unshift(log);
+      results.push({
+        patientId: patient.id,
+        patientName: patient.name,
+        phone: patient.phone,
+        status: 'enviado',
+        directWebUrl: getWhatsAppWebUrl(patient.phone, msg)
+      });
+    }
+
+    saveLocalData(data);
+
+    return {
+      success: true,
+      total: birthdayPatients.length,
+      sent: birthdayPatients.length,
+      errors: 0,
       results
     };
   }

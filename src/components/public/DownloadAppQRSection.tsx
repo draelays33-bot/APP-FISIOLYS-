@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { QrCode, Smartphone, Download, Copy, Check, Share2, Sparkles, ExternalLink, ShieldCheck, ArrowRight, X, MapPin, Navigation, Star } from 'lucide-react';
+import { QrCode, Smartphone, Download, Copy, Check, Share2, Sparkles, ExternalLink, ShieldCheck, ArrowRight, X, MapPin, Navigation, Star, Zap } from 'lucide-react';
 import { generateQRCodeDataUrl, getPublicAppUrl, getClinicMapUrl, getGoogleReviewUrl } from '../../utils/qrUtils';
 import { getImageUrl } from '../../utils/imageUtils';
 import { api } from '../../services/api';
@@ -106,38 +106,38 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-[#EAF0DB] hover:bg-[#d8e4c3] text-[#31523D] text-xs font-black transition-all cursor-pointer border border-[#9CB55E]/50 shadow-2xs"
+          className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-[#FAF7F0] hover:bg-[#F3EEE2] text-[#1B2E24] text-xs font-semibold transition-all cursor-pointer border border-[#E4DCC8] shadow-2xs"
         >
-          <Smartphone className="w-4 h-4 text-[#5F6D33]" />
+          <Smartphone className="w-3.5 h-3.5 text-[#B08A3E]" />
           <span>Baixar App (QR Code)</span>
         </button>
 
         {showModal && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
-            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 relative text-center">
+          <div className="fixed inset-0 bg-[#1B2E24]/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+            <div className="bg-[#FAF7F0] rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#E4DCC8] space-y-4 relative text-center">
               <button
                 onClick={() => setShowModal(false)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+                className="absolute top-4 right-4 text-[#5B5A52] hover:text-[#26241F] p-1.5 rounded-full hover:bg-[#F3EEE2] transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
 
-              <div className="flex items-center justify-center space-x-2 text-[#31523D] font-black text-sm">
-                <QrCode className="w-5 h-5 text-[#5F6D33]" />
+              <div className="flex items-center justify-center space-x-2 text-[#1B2E24] font-bold text-sm">
+                <QrCode className="w-5 h-5 text-[#B08A3E]" />
                 <span>Aplicativo & Localização Fisiolys</span>
               </div>
 
-              <h3 className="text-lg font-black text-slate-800">
-                {qrMode === 'destino' ? '📍 Mapa & Rota de Destino' : '📱 Escaneie para Abrir o App'}
+              <h3 className="text-lg font-serif font-bold text-[#1B2E24]">
+                {qrMode === 'destino' ? 'Mapa & Rota da Clínica' : 'Escaneie para Abrir o App'}
               </h3>
 
               {/* Mode Switcher inside Modal */}
-              <div className="flex rounded-xl bg-slate-100 p-1 text-xs font-bold gap-1">
+              <div className="flex rounded-full bg-[#F3EEE2] p-1 text-xs font-semibold gap-1 border border-[#E4DCC8]">
                 <button
                   type="button"
                   onClick={() => setQrMode('public')}
-                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center space-x-1 ${
-                    qrMode === 'public' ? 'bg-[#31523D] text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'
+                  className={`flex-1 py-1.5 rounded-full transition-all cursor-pointer flex items-center justify-center space-x-1 ${
+                    qrMode === 'public' ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs' : 'text-[#5B5A52] hover:text-[#26241F]'
                   }`}
                 >
                   <Smartphone className="w-3.5 h-3.5" />
@@ -146,8 +146,8 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
                 <button
                   type="button"
                   onClick={() => setQrMode('google_review')}
-                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center space-x-1 ${
-                    qrMode === 'google_review' ? 'bg-[#4285F4] text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'
+                  className={`flex-1 py-1.5 rounded-full transition-all cursor-pointer flex items-center justify-center space-x-1 ${
+                    qrMode === 'google_review' ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs' : 'text-[#5B5A52] hover:text-[#26241F]'
                   }`}
                 >
                   <GoogleGIcon className="w-3.5 h-3.5" />
@@ -156,8 +156,8 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
                 <button
                   type="button"
                   onClick={() => setQrMode('destino')}
-                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center space-x-1 ${
-                    qrMode === 'destino' ? 'bg-[#D0A73B] text-[#1B2B22] shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'
+                  className={`flex-1 py-1.5 rounded-full transition-all cursor-pointer flex items-center justify-center space-x-1 ${
+                    qrMode === 'destino' ? 'bg-[#B08A3E] text-[#FAF7F0] shadow-xs' : 'text-[#5B5A52] hover:text-[#26241F]'
                   }`}
                 >
                   <Navigation className="w-3.5 h-3.5" />
@@ -165,9 +165,9 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
                 </button>
               </div>
 
-              <p className="text-xs text-slate-500 max-w-xs mx-auto">
+              <p className="text-xs text-[#5B5A52] max-w-xs mx-auto">
                 {qrMode === 'destino' 
-                  ? 'Aponte a câmera para abrir o mapa no Google Maps: Av. Coronel José Porfírio, nº 3025 - Recreio.'
+                  ? 'Aponte a câmera para abrir a rota no Google Maps: Av. Coronel José Porfírio, nº 3025 - Recreio.'
                   : qrMode === 'google_review'
                   ? 'Aponte a câmera do celular para deixar sua avaliação 5 Estrelas no Google!'
                   : 'Aponte a câmera do seu celular para abrir o aplicativo de agendamentos!'}
@@ -176,20 +176,20 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
               <div
                 onClick={() => window.open(currentActiveUrl, '_blank')}
                 title="Clique aqui para abrir em uma nova aba"
-                className="p-3 bg-white border-2 border-dashed border-[#9CB55E] hover:border-[#31523D] rounded-2xl inline-block shadow-xs my-1 cursor-pointer group transition-all transform hover:scale-105"
+                className="p-3 bg-white border-2 border-dashed border-[#B08A3E] hover:border-[#1B2E24] rounded-2xl inline-block shadow-xs my-1 cursor-pointer group transition-all"
               >
                 {qrDataUrl ? (
                   <div className="relative">
                     <img src={qrDataUrl} alt="QR Code Fisiolys" className="w-44 h-44 mx-auto" />
-                    <div className="absolute inset-0 bg-[#31523D]/10 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-xl transition-opacity">
-                      <span className="bg-[#31523D] text-white px-3 py-1 rounded-full text-xs font-black shadow-md flex items-center space-x-1">
-                        <ExternalLink className="w-3.5 h-3.5" />
+                    <div className="absolute inset-0 bg-[#1B2E24]/10 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-xl transition-opacity">
+                      <span className="bg-[#1B2E24] text-[#FAF7F0] px-3 py-1 rounded-full text-xs font-bold shadow-md flex items-center space-x-1">
+                        <ExternalLink className="w-3.5 h-3.5 text-[#DCC58F]" />
                         <span>{qrMode === 'destino' ? 'Abrir Mapa' : qrMode === 'google_review' ? 'Avaliar no Google' : 'Abrir App'}</span>
                       </span>
                     </div>
                   </div>
                 ) : (
-                  <div className="w-44 h-44 flex items-center justify-center text-xs text-slate-400">
+                  <div className="w-44 h-44 flex items-center justify-center text-xs text-[#5B5A52]">
                     Gerando QR Code...
                   </div>
                 )}
@@ -200,9 +200,9 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
                   href={publicAppUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-2.5 px-4 rounded-xl bg-[#31523D] hover:bg-[#23372B] text-white font-extrabold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
+                  className="w-full py-2.5 px-4 rounded-full bg-[#1B2E24] hover:bg-[#22392C] text-[#FAF7F0] font-bold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
                 >
-                  <Smartphone className="w-4 h-4 text-[#D0A73B]" />
+                  <Smartphone className="w-4 h-4 text-[#DCC58F]" />
                   <span>Abrir App em Nova Aba</span>
                 </a>
 
@@ -210,28 +210,28 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
                   href={reviewDirectUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-extrabold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
+                  className="w-full py-2.5 px-4 rounded-full bg-[#FAF7F0] hover:bg-[#F3EEE2] text-[#26241F] border border-[#E4DCC8] font-bold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-2xs"
                 >
                   <GoogleGIcon className="w-4 h-4" />
                   <span>Avaliar no Google 5 Estrelas</span>
-                  <span className="text-amber-400">★★★★★</span>
+                  <span className="text-[#B08A3E]">★★★★★</span>
                 </a>
 
                 <a
                   href={mapDirectUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-2.5 px-4 rounded-xl bg-[#D0A73B] hover:bg-[#b8912d] text-[#1B2B22] font-extrabold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
+                  className="w-full py-2.5 px-4 rounded-full bg-[#B08A3E] hover:bg-[#9A7632] text-[#FAF7F0] font-bold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
                 >
-                  <Navigation className="w-4 h-4 text-[#1B2B22]" />
+                  <Navigation className="w-4 h-4 text-[#FAF7F0]" />
                   <span>Ver Destino no Google Maps</span>
                 </a>
 
                 <button
                   onClick={() => handleCopyLink(currentActiveUrl)}
-                  className="w-full py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer"
+                  className="w-full py-2 px-4 rounded-full bg-[#F3EEE2] hover:bg-[#ECE4D3] text-[#26241F] font-semibold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer border border-[#E4DCC8]"
                 >
-                  {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                  {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-[#5B5A52]" />}
                   <span>{copied ? 'Link Copiado!' : 'Copiar Link'}</span>
                 </button>
               </div>
@@ -243,41 +243,45 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
   }
 
   return (
-    <div className="bg-gradient-to-br from-[#1B2B22] via-[#284232] to-[#1B2B22] rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden border-2 border-[#D0A73B]/50 my-8">
+    <div className="bg-[#1B2E24] rounded-3xl p-6 sm:p-8 text-[#FAF7F0] shadow-xl relative overflow-hidden border border-[#B08A3E]/40 my-8">
       {/* Decorative background glow */}
-      <div className="absolute -top-12 -right-12 w-60 h-60 bg-[#D0A73B]/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -top-12 -right-12 w-60 h-60 bg-[#B08A3E]/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
         
         {/* Left Column: Information & App Benefits */}
         <div className="lg:col-span-7 space-y-4 text-center lg:text-left">
-          <div className="inline-flex items-center space-x-2 bg-[#D0A73B]/20 border border-[#D0A73B]/50 px-3 py-1 rounded-full text-xs font-black text-[#F5EED3]">
-            <Smartphone className="w-4 h-4 text-[#D0A73B]" />
+          <div className="inline-flex items-center space-x-2 bg-[#FAF7F0]/10 border border-[#DCC58F]/30 px-3.5 py-1 rounded-full text-xs font-semibold text-[#DCC58F]">
+            <Smartphone className="w-3.5 h-3.5 text-[#DCC58F]" />
             <span>Aplicativo Web & Localização Fisiolys</span>
           </div>
 
-          <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
-            Leve a Clínica no Seu Celular!
+          <h2 className="text-2xl sm:text-3xl font-serif font-bold text-[#FAF7F0] tracking-tight leading-tight">
+            Leve a Clínica no Seu Celular
           </h2>
 
-          <p className="text-xs sm:text-sm text-[#EAF0DB]/90 leading-relaxed font-medium max-w-xl">
-            Aponte a câmera do seu smartphone para o QR Code para abrir o aplicativo de agendamentos ou obter a rota direta para a nossa clínica na <strong>Av. Coronel José Porfírio, nº 3025 - Recreio</strong>.
+          <p className="text-xs sm:text-sm text-[#FAF7F0]/80 leading-relaxed font-normal max-w-xl">
+            Aponte a câmera do seu smartphone para o QR Code para abrir o aplicativo de agendamentos ou obter a rota direta para nossa clínica na <strong>Av. Coronel José Porfírio, nº 3025 - Recreio</strong>.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-xs">
-            <div className="bg-white/10 backdrop-blur-md p-3 rounded-2xl border border-white/10 flex items-center space-x-2.5">
-              <span className="text-lg">⚡</span>
+            <div className="bg-[#FAF7F0]/10 backdrop-blur-md p-3.5 rounded-2xl border border-[#DCC58F]/20 flex items-center space-x-3 text-left">
+              <div className="w-8 h-8 rounded-xl bg-[#FAF7F0]/15 flex items-center justify-center shrink-0 text-[#DCC58F]">
+                <Zap className="w-4 h-4" />
+              </div>
               <div>
-                <strong className="text-white font-bold block">Agendamento em 2 Clicks</strong>
-                <span className="text-[11px] text-[#EAF0DB]/70">Marque Pilates ou Fisioterapia pelo celular.</span>
+                <strong className="text-[#FAF7F0] font-semibold block">Agendamento Fácil</strong>
+                <span className="text-[11px] text-[#FAF7F0]/70">Marque Pilates ou Fisioterapia direto pelo celular.</span>
               </div>
             </div>
 
-            <div className="bg-white/10 backdrop-blur-md p-3 rounded-2xl border border-white/10 flex items-center space-x-2.5">
-              <span className="text-lg">📍</span>
+            <div className="bg-[#FAF7F0]/10 backdrop-blur-md p-3.5 rounded-2xl border border-[#DCC58F]/20 flex items-center space-x-3 text-left">
+              <div className="w-8 h-8 rounded-xl bg-[#FAF7F0]/15 flex items-center justify-center shrink-0 text-[#DCC58F]">
+                <MapPin className="w-4 h-4" />
+              </div>
               <div>
-                <strong className="text-white font-bold block">Localização Exata</strong>
-                <span className="text-[11px] text-[#EAF0DB]/70">Av. Coronel José Porfírio, nº 3025 - Recreio.</span>
+                <strong className="text-[#FAF7F0] font-semibold block">Localização Exata</strong>
+                <span className="text-[11px] text-[#FAF7F0]/70">Av. Coronel José Porfírio, nº 3025 - Recreio.</span>
               </div>
             </div>
           </div>
@@ -288,9 +292,9 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
               href={publicAppUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-[#31523D] hover:bg-[#23372B] text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition-all cursor-pointer shadow-md flex items-center space-x-2 border border-[#D0A73B]/40"
+              className="bg-[#FAF7F0] hover:bg-[#F3EEE2] text-[#1B2E24] font-bold px-4 py-2.5 rounded-full text-xs transition-all cursor-pointer shadow-xs flex items-center space-x-2 border border-[#E4DCC8]"
             >
-              <Smartphone className="w-4 h-4 text-[#D0A73B]" />
+              <Smartphone className="w-4 h-4 text-[#B08A3E]" />
               <span>Abrir App em Nova Aba</span>
             </a>
 
@@ -298,39 +302,39 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
               href={reviewDirectUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-white hover:bg-slate-100 text-slate-800 font-extrabold px-4 py-2.5 rounded-xl text-xs transition-all cursor-pointer shadow-md flex items-center space-x-2 border border-slate-200"
+              className="bg-[#FAF7F0]/10 hover:bg-[#FAF7F0]/20 text-[#FAF7F0] font-semibold px-4 py-2.5 rounded-full text-xs transition-all cursor-pointer shadow-xs flex items-center space-x-2 border border-[#DCC58F]/30"
             >
               <GoogleGIcon className="w-4 h-4" />
               <span>Avaliar no Google</span>
-              <span className="flex text-amber-400 font-bold text-xs">★★★★★</span>
+              <span className="text-[#DCC58F] font-bold text-xs">5.0 ★</span>
             </a>
 
             <a
               href={mapDirectUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-[#D0A73B] hover:bg-[#b8912e] text-[#1B2B22] font-black px-4 py-2.5 rounded-xl text-xs transition-all cursor-pointer shadow-md flex items-center space-x-2"
+              className="bg-[#B08A3E] hover:bg-[#9A7632] text-[#FAF7F0] font-bold px-4 py-2.5 rounded-full text-xs transition-all cursor-pointer shadow-xs flex items-center space-x-2"
             >
-              <Navigation className="w-4 h-4 text-[#1B2B22]" />
-              <span>Ver Destino no Google Maps</span>
+              <Navigation className="w-4 h-4 text-[#FAF7F0]" />
+              <span>Ver Destino no Maps</span>
             </a>
 
             <button
               onClick={handleShareWhatsApp}
-              className="bg-[#25D366] hover:bg-[#1EBE57] text-white font-black px-4 py-2.5 rounded-xl text-xs transition-all cursor-pointer shadow-md flex items-center space-x-2"
+              className="bg-[#25D366] hover:bg-[#1EBE57] text-white font-bold px-4 py-2.5 rounded-full text-xs transition-all cursor-pointer shadow-xs flex items-center space-x-2"
             >
               <Share2 className="w-4 h-4 fill-white" />
-              <span>Enviar via WhatsApp</span>
+              <span>WhatsApp</span>
             </button>
           </div>
         </div>
 
         {/* Right Column: QR Code Display Box with Mascot Lys */}
         <div className="lg:col-span-5 flex flex-col items-center justify-center">
-          <div className="bg-white rounded-3xl p-6 text-slate-800 shadow-2xl border-4 border-[#D0A73B] text-center max-w-xs w-full relative">
+          <div className="bg-[#FAF7F0] rounded-3xl p-6 text-[#26241F] shadow-2xl border-2 border-[#B08A3E] text-center max-w-xs w-full relative">
             
             {/* Mascot Lys Badge on top of QR Card */}
-            <div className="absolute -top-6 -right-4 w-14 h-14 rounded-full overflow-hidden border-2 border-[#D0A73B] shadow-lg bg-[#31523D]">
+            <div className="absolute -top-6 -right-4 w-13 h-13 rounded-full overflow-hidden border-2 border-[#B08A3E] shadow-md bg-[#1B2E24]">
               <img
                 src={getImageUrl("/src/assets/images/mascot_griffin_lys_1785804022309.jpg")}
                 alt="Lys Grifo Mascote"
@@ -339,29 +343,29 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
               />
             </div>
 
-            <span className="text-[10px] font-black tracking-widest text-[#5F6D33] uppercase bg-[#EAF0DB] px-3 py-0.5 rounded-full inline-block mb-2">
+            <span className="text-[10px] font-semibold tracking-wider text-[#B08A3E] uppercase bg-[#F3EEE2] border border-[#E4DCC8] px-3 py-0.5 rounded-full inline-block mb-2">
               {clinicName}
             </span>
 
-            <h4 className="text-sm font-extrabold text-slate-900 mb-1">
+            <h4 className="text-sm font-serif font-bold text-[#1B2E24] mb-1">
               Escaneie o QR Code
             </h4>
-            <div className="flex items-center justify-center space-x-1.5 text-[10px] text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200/80 my-2">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span className="font-bold">Acesso Público Direto pelo Celular</span>
+            <div className="flex items-center justify-center space-x-1.5 text-[10px] text-[#1B2E24] bg-[#F3EEE2] px-2.5 py-1 rounded-full border border-[#E4DCC8] my-2">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#B08A3E] shrink-0" />
+              <span className="font-semibold">Acesso Público Direto pelo Celular</span>
             </div>
 
-            <p className="text-[11px] text-slate-500 mb-2">
+            <p className="text-[11px] text-[#5B5A52] mb-2">
               Escolha qual QR Code deseja visualizar:
             </p>
 
             {/* QR Mode Switcher Tabs */}
-            <div className="flex rounded-xl bg-slate-100 p-1 mb-3 text-[10px] font-bold gap-0.5">
+            <div className="flex rounded-full bg-[#F3EEE2] p-1 mb-3 text-[10px] font-semibold gap-0.5 border border-[#E4DCC8]">
               <button
                 type="button"
                 onClick={() => setQrMode('public')}
-                className={`flex-1 py-1.5 px-1 rounded-lg transition-all cursor-pointer flex items-center justify-center space-x-1 ${
-                  qrMode === 'public' ? 'bg-[#31523D] text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'
+                className={`flex-1 py-1.5 px-1 rounded-full transition-all cursor-pointer flex items-center justify-center space-x-1 ${
+                  qrMode === 'public' ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs' : 'text-[#5B5A52] hover:text-[#26241F]'
                 }`}
               >
                 <Smartphone className="w-3 h-3" />
@@ -371,8 +375,8 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
               <button
                 type="button"
                 onClick={() => setQrMode('google_review')}
-                className={`flex-1 py-1.5 px-1 rounded-lg transition-all cursor-pointer flex items-center justify-center space-x-1 ${
-                  qrMode === 'google_review' ? 'bg-[#4285F4] text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'
+                className={`flex-1 py-1.5 px-1 rounded-full transition-all cursor-pointer flex items-center justify-center space-x-1 ${
+                  qrMode === 'google_review' ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs' : 'text-[#5B5A52] hover:text-[#26241F]'
                 }`}
               >
                 <GoogleGIcon className="w-3 h-3" />
@@ -382,8 +386,8 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
               <button
                 type="button"
                 onClick={() => setQrMode('destino')}
-                className={`flex-1 py-1.5 px-1 rounded-lg transition-all cursor-pointer flex items-center justify-center space-x-1 ${
-                  qrMode === 'destino' ? 'bg-[#D0A73B] text-[#1B2B22] shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'
+                className={`flex-1 py-1.5 px-1 rounded-full transition-all cursor-pointer flex items-center justify-center space-x-1 ${
+                  qrMode === 'destino' ? 'bg-[#B08A3E] text-[#FAF7F0] shadow-xs' : 'text-[#5B5A52] hover:text-[#26241F]'
                 }`}
               >
                 <Navigation className="w-3 h-3 text-current" />
@@ -393,8 +397,8 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
               <button
                 type="button"
                 onClick={() => setQrMode('whatsapp')}
-                className={`flex-1 py-1.5 px-1 rounded-lg transition-all cursor-pointer flex items-center justify-center space-x-1 ${
-                  qrMode === 'whatsapp' ? 'bg-[#25D366] text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'
+                className={`flex-1 py-1.5 px-1 rounded-full transition-all cursor-pointer flex items-center justify-center space-x-1 ${
+                  qrMode === 'whatsapp' ? 'bg-[#25D366] text-white shadow-xs' : 'text-[#5B5A52] hover:text-[#26241F]'
                 }`}
               >
                 <Share2 className="w-3 h-3" />
@@ -409,7 +413,7 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
                   value={customUrl}
                   onChange={(e) => setCustomUrl(e.target.value)}
                   placeholder="https://suaclinica.com.br"
-                  className="w-full text-[11px] px-2.5 py-1.5 rounded-lg border border-slate-300 bg-slate-50 text-slate-800 font-mono"
+                  className="w-full text-[11px] px-2.5 py-1.5 rounded-xl border border-[#E4DCC8] bg-white text-[#26241F] font-mono"
                 />
               </div>
             )}
@@ -418,7 +422,7 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
             <div
               onClick={() => window.open(currentActiveUrl, '_blank')}
               title={`Clique para abrir em nova aba (${qrMode === 'destino' ? 'Google Maps' : 'Aplicativo'})`}
-              className="p-3 bg-slate-50 border-2 border-dashed border-[#9CB55E] hover:border-[#31523D] rounded-2xl inline-block shadow-inner mb-3 cursor-pointer group transition-all transform hover:scale-105"
+              className="p-3 bg-white border-2 border-dashed border-[#B08A3E] hover:border-[#1B2E24] rounded-2xl inline-block shadow-2xs mb-3 cursor-pointer group transition-all"
             >
               {qrDataUrl ? (
                 <div className="relative">
@@ -427,29 +431,29 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
                     alt="QR Code Fisiolys"
                     className="w-44 h-44 mx-auto"
                   />
-                  <div className="absolute inset-0 bg-[#31523D]/10 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-xl transition-opacity">
-                    <span className="bg-[#31523D] text-white px-3 py-1 rounded-full text-xs font-black shadow-md flex items-center space-x-1">
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>{qrMode === 'destino' ? 'Abrir no Mapa' : 'Abrir App'}</span>
+                  <div className="absolute inset-0 bg-[#1B2E24]/10 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-xl transition-opacity">
+                    <span className="bg-[#1B2E24] text-[#FAF7F0] px-3 py-1 rounded-full text-xs font-bold shadow-md flex items-center space-x-1">
+                      <ExternalLink className="w-3.5 h-3.5 text-[#DCC58F]" />
+                      <span>{qrMode === 'destino' ? 'Abrir no Maps' : 'Abrir App'}</span>
                     </span>
                   </div>
                 </div>
               ) : (
-                <div className="w-44 h-44 flex items-center justify-center text-xs text-slate-400">
+                <div className="w-44 h-44 flex items-center justify-center text-xs text-[#5B5A52]">
                   Gerando QR Code...
                 </div>
               )}
             </div>
 
             {/* Quick action buttons right below QR Code */}
-            <div className="grid grid-cols-1 gap-2 w-full text-xs font-bold">
+            <div className="grid grid-cols-1 gap-2 w-full text-xs font-semibold">
               <a
                 href={publicAppUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-2 bg-[#31523D] hover:bg-[#23372B] text-white rounded-xl transition-colors cursor-pointer flex items-center justify-center space-x-1.5 shadow-xs"
+                className="w-full py-2.5 bg-[#1B2E24] hover:bg-[#22392C] text-[#FAF7F0] font-bold rounded-full transition-colors cursor-pointer flex items-center justify-center space-x-1.5 shadow-xs"
               >
-                <Smartphone className="w-3.5 h-3.5 text-[#D0A73B]" />
+                <Smartphone className="w-3.5 h-3.5 text-[#DCC58F]" />
                 <span>Abrir App em Nova Aba</span>
               </a>
 
@@ -457,18 +461,18 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
                 href={mapDirectUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-2 bg-[#D0A73B] hover:bg-[#b8912e] text-[#1B2B22] font-black rounded-xl transition-colors cursor-pointer flex items-center justify-center space-x-1.5 shadow-xs"
+                className="w-full py-2 bg-[#B08A3E] hover:bg-[#9A7632] text-[#FAF7F0] font-bold rounded-full transition-colors cursor-pointer flex items-center justify-center space-x-1.5 shadow-xs"
               >
-                <Navigation className="w-3.5 h-3.5 text-[#1B2B22]" />
-                <span>Ver Destino no Google Maps</span>
+                <Navigation className="w-3.5 h-3.5 text-[#FAF7F0]" />
+                <span>Ver Destino no Maps</span>
               </a>
 
               <button
                 type="button"
                 onClick={handleDownloadQR}
-                className="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center space-x-1.5"
+                className="w-full py-1.5 bg-[#F3EEE2] hover:bg-[#ECE4D3] text-[#26241F] text-[11px] font-semibold rounded-full transition-colors cursor-pointer flex items-center justify-center space-x-1.5 border border-[#E4DCC8]"
               >
-                <Download className="w-3.5 h-3.5 text-[#5F6D33]" />
+                <Download className="w-3.5 h-3.5 text-[#B08A3E]" />
                 <span>Baixar Imagem QR Code</span>
               </button>
             </div>
@@ -479,3 +483,4 @@ export const DownloadAppQRSection: React.FC<DownloadAppQRSectionProps> = ({
     </div>
   );
 };
+

@@ -31,17 +31,33 @@ export type AppointmentStatus = 'agendado' | 'concluido' | 'falta' | 'cancelado'
 
 export type PaymentMethod = 'pix' | 'card_link' | 'presencial' | 'cartao_recorrente';
 
+export type FrequencyType = 'sessao_unica' | '2x_semana' | '3x_semana' | 'multiplos_dias';
+
+export interface WeeklyDaySchedule {
+  dayOfWeek: number; // 1 = Seg, 2 = Ter, 3 = Qua, 4 = Qui, 5 = Sex, 6 = Sáb
+  dayName: string;   // e.g. "Terça-feira"
+  time: string;      // e.g. "08:00"
+}
+
 export interface Appointment {
   id: string;
   patientName: string;
   patientPhone: string;
   patientEmail?: string;
+  patientBirthDate?: string;
+  patientAddress?: string;
+  patientCity?: string;
+  patientCpf?: string;
   serviceId: string;
   serviceName: string;
   servicePrice: number;
   durationMinutes: number;
-  date: string; // YYYY-MM-DD
+  date: string; // YYYY-MM-DD (Data principal ou de início)
   time: string; // HH:MM
+  frequencyType?: FrequencyType;
+  selectedDaysSchedule?: WeeklyDaySchedule[];
+  planScheduleSummary?: string;
+  multipleDates?: { date: string; time: string }[];
   status: AppointmentStatus;
   attendanceStatus?: 'presenca' | 'falta' | 'pendente';
   attendanceNotes?: string;
@@ -106,6 +122,9 @@ export interface Patient {
   phone: string;
   email?: string;
   cpf?: string;
+  birthDate?: string; // YYYY-MM-DD
+  address?: string;
+  city?: string;
   firstSessionDate?: string;
   lastSessionDate?: string;
   totalSessions: number;
@@ -122,6 +141,10 @@ export interface ClinicConfig {
   address: string;
   city: string;
   managerName: string;
+  managerCpf?: string;
+  managerCrefito?: string;
+  cnpj?: string;
+  managerSignatureUrl?: string;
   webhookUrl: string;
   webhookEnabled: boolean;
   logoUrl?: string;
@@ -135,13 +158,176 @@ export interface ClinicConfig {
   whatsappAutoSendBooking?: boolean;
   whatsappAutoSendReminderD1?: boolean;
   whatsappAutoSendReminderD0?: boolean;
+  whatsappAutoSendReminder2h?: boolean;
+  whatsappAutoSendBirthday?: boolean;
+  whatsappAutoSendSpecialOccasion?: boolean;
   whatsappTemplateBooking?: string;
   whatsappTemplateD1?: string;
   whatsappTemplateD0?: string;
+  whatsappTemplateReminder2h?: string;
+  whatsappTemplateBirthday?: string;
+  whatsappTemplateSpecialOccasion?: string;
 }
 
-export type AppView = 'public' | 'services' | 'patient_portal' | 'admin';
-export type AdminTab = 'dashboard' | 'agenda' | 'servicos' | 'horarios' | 'pacientes' | 'fidelidade' | 'financeiro' | 'qrcode' | 'webhook' | 'whatsapp';
+export type AppView = 'public' | 'services' | 'patient_portal' | 'crm' | 'admin';
+export type AdminTab = 
+  | 'agenda'         // Área 1: Agenda Eletrônica (Google Calendar, Horários, Encaixes, Tarefas)
+  | 'prontuario'     // Área 2: Prontuário Eletrônico (Avaliações, Evoluções, Pacientes, TCLE/Contratos, Exames)
+  | 'financeiro'     // Área 3: Financeiro (Faturamento, Pendentes/Recebidos, Clube Fidelidade, Recibos PDF)
+  | 'servicos'       // Área 4: Serviços & Planos (Catálogo unificado, Planos e Pacotes como alternativas)
+  | 'crm'            // Área 5: CRM & Comunicação (Leads/Funil, WhatsApp, Webhook/Disparos, Assistente IA)
+  | 'configuracoes'  // Configurações & Senhas
+  | 'dashboard'      // Visão Geral / Métricas
+  | 'horarios'       // Legacy support
+  | 'pacientes'      // Legacy support
+  | 'fidelidade'     // Legacy support
+  | 'qrcode'         // Legacy support
+  | 'webhook'        // Legacy support
+  | 'whatsapp';      // Legacy support
+
+// --- CRM & EVOLUÇÃO CLÍNICA FISIOLYS TYPES ---
+export type CrmLeadStatus = 'novo' | 'conversa' | 'agendado' | 'paciente' | 'perdido';
+export type CrmLeadPriority = 'alta' | 'media' | 'baixa';
+
+export interface CrmLead {
+  id: string;
+  nome: string;
+  telefone: string;
+  protocolo: string;
+  status: CrmLeadStatus;
+  prioridade?: CrmLeadPriority;
+  origem: string;
+  notas: string;
+  criadoEm: string;
+  tags?: string[];
+}
+
+export interface CrmAppointmentItem {
+  id: string;
+  leadId?: string;
+  leadNomeAvulso?: string;
+  pacienteNome?: string;
+  pacienteTelefone?: string;
+  pacienteCpf?: string;
+  appointmentId?: string;
+  protocolo: string;
+  data: string; // YYYY-MM-DD
+  horario: string; // HH:MM
+  situacao: 'pendente' | 'confirmado';
+}
+
+export type CrmExamType = 'raio_x' | 'ressonancia' | 'tomografia' | 'ultrassom' | 'laudo_medico' | 'outro';
+
+export interface CrmExamAttachment {
+  id: string;
+  nome: string;
+  tipo: CrmExamType;
+  data: string; // YYYY-MM-DD
+  arquivoUrl: string; // base64 / blob / image url
+  tamanhoFormatado?: string;
+  observacoes?: string;
+}
+
+export type CrmPresencaStatus = 'presente' | 'falta_justificada' | 'falta_sem_aviso' | 'reposicao';
+
+export interface CrmEvolucao {
+  id: string;
+  data: string; // YYYY-MM-DD
+  sessao: number; // e.g. 1
+  totalSessoesPlano?: number; // e.g. 10 -> tag "1/10"
+  presencaStatus?: CrmPresencaStatus; // 'presente' | 'falta_justificada' | 'falta_sem_aviso' | 'reposicao'
+  quantidadeRealizada?: string; // e.g. "1/10"
+  procedimentos: string;
+  dorAntes: number; // 0 to 10
+  dorDepois: number; // 0 to 10
+  observacoes: string;
+  examesAnexados?: CrmExamAttachment[];
+}
+
+export interface CrmSignatureAuditLog {
+  id: string;
+  quemAssinou: string;
+  tipo: 'paciente' | 'responsavel' | 'terapeuta';
+  dataHora: string;
+  hash: string;
+  status: 'valido' | 'revisado' | 'substituido';
+  dispositivo?: string;
+  observacao?: string;
+}
+
+export interface CrmAvaliacao {
+  id: string;
+  leadId?: string;
+  leadNomeAvulso?: string;
+  pacienteId?: string;
+  pacienteNome?: string;
+  pacienteCpf?: string;
+  idade: string;
+  profissao: string;
+  cpf?: string;
+  telefone?: string;
+  endereco?: string;
+  data: string; // YYYY-MM-DD
+  avaliador: string;
+  queixaPrincipal: string;
+  historico: string;
+  medicamentos: string;
+  comorbidades: string;
+  escalaDor: number; // 0 to 10
+  inspecao: string;
+  adm: string;
+  forcaMuscular: string;
+  testesEspeciais: string;
+  diagnosticoFuncional: string;
+  objetivos: string;
+  planoTerapeutico: string;
+  frequenciaSemanal?: string;
+  valorTratamento?: string;
+  formaPagamento?: string;
+  evolucoes: CrmEvolucao[];
+  examesAnexados?: CrmExamAttachment[];
+  tags?: string[];
+  // Termo de Consentimento de Uso de Imagem e Voz (COFFITO 532/2021 & LGPD)
+  termoImagemVozAceito?: boolean;
+  termoImagemVozTipo?: 'completo' | 'cientifico_apenas' | 'recusado';
+  termoImagemVozData?: string;
+  termoImagemVozObservacoes?: string;
+  // Assinatura Digital do Paciente pós-avaliação
+  assinaturaPacienteUrl?: string; // base64 PNG data url
+  assinaturaProfissionalUrl?: string; // base64 PNG data url da Dra. Elays Marinho
+  assinaturaData?: string; // Data e horário da assinatura
+  assinaturaHash?: string; // Hash único de validação legal
+  assinaturaHistorico?: CrmSignatureAuditLog[]; // Rastreabilidade e histórico de revisões
+}
+
+export interface CrmTask {
+  id: string;
+  titulo: string;
+  pacienteOuLead: string;
+  dataLimite: string;
+  prioridade: 'alta' | 'media' | 'baixa';
+  concluida: boolean;
+  categoria: 'follow_up' | 'retorno' | 'recibo' | 'pilates' | 'outro';
+}
+
+export interface CrmTcle {
+  id: string;
+  pacienteNome: string;
+  pacienteCpf?: string;
+  procedimento: string;
+  dataAssinatura: string;
+  status: 'assinado' | 'pendente';
+  termoTexto?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  sender: 'user' | 'assistant' | 'system';
+  text: string;
+  timestamp: string;
+  thinkingProcess?: string; // Thinking / Chain-of-thought explanation
+  suggestedActions?: { label: string; actionType: string; payload?: any }[];
+}
 
 export type LoyaltyStatus = 'ativo' | 'inativo' | 'inadimplente';
 

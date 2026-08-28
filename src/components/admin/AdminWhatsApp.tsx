@@ -213,12 +213,16 @@ export const AdminWhatsApp: React.FC<AdminWhatsAppProps> = ({ clinic, appointmen
   const [autoSendBooking, setAutoSendBooking] = useState<boolean>(clinic.whatsappAutoSendBooking !== false);
   const [autoSendReminderD1, setAutoSendReminderD1] = useState<boolean>(clinic.whatsappAutoSendReminderD1 !== false);
   const [autoSendReminderD0, setAutoSendReminderD0] = useState<boolean>(clinic.whatsappAutoSendReminderD0 !== false);
+  const [autoSendBirthday, setAutoSendBirthday] = useState<boolean>(clinic.whatsappAutoSendBirthday !== false);
+  const [autoSendSpecialOccasion, setAutoSendSpecialOccasion] = useState<boolean>(clinic.whatsappAutoSendSpecialOccasion !== false);
 
   // Templates state
   const [templateBooking, setTemplateBooking] = useState<string>(clinic.whatsappTemplateBooking || DEFAULT_WHATSAPP_TEMPLATES.bookingConfirmation);
   const [templateD1, setTemplateD1] = useState<string>(clinic.whatsappTemplateD1 || DEFAULT_WHATSAPP_TEMPLATES.reminderD1);
   const [templateD0, setTemplateD0] = useState<string>(clinic.whatsappTemplateD0 || DEFAULT_WHATSAPP_TEMPLATES.reminderD0);
-  const [activeTemplateTab, setActiveTemplateTab] = useState<'booking' | 'd1' | 'd0'>('d0');
+  const [templateBirthday, setTemplateBirthday] = useState<string>(clinic.whatsappTemplateBirthday || DEFAULT_WHATSAPP_TEMPLATES.birthday);
+  const [templateSpecialOccasion, setTemplateSpecialOccasion] = useState<string>(clinic.whatsappTemplateSpecialOccasion || DEFAULT_WHATSAPP_TEMPLATES.specialOccasion);
+  const [activeTemplateTab, setActiveTemplateTab] = useState<'booking' | 'd1' | 'd0' | 'birthday' | 'special_occasion'>('d0');
 
   // Saving states
   const [savingConfig, setSavingConfig] = useState(false);
@@ -284,11 +288,15 @@ export const AdminWhatsApp: React.FC<AdminWhatsAppProps> = ({ clinic, appointmen
         whatsappAutoSendBooking: autoSendBooking,
         whatsappAutoSendReminderD1: autoSendReminderD1,
         whatsappAutoSendReminderD0: autoSendReminderD0,
+        whatsappAutoSendBirthday: autoSendBirthday,
+        whatsappAutoSendSpecialOccasion: autoSendSpecialOccasion,
         whatsappTemplateBooking: templateBooking,
         whatsappTemplateD1: templateD1,
         whatsappTemplateD0: templateD0,
+        whatsappTemplateBirthday: templateBirthday,
+        whatsappTemplateSpecialOccasion: templateSpecialOccasion,
       });
-      setConfigFeedback({ type: 'success', message: 'Configurações de WhatsApp e Lembretes salvas com sucesso!' });
+      setConfigFeedback({ type: 'success', message: 'Configurações de WhatsApp, Lembretes e Engajamento salvas com sucesso!' });
       onReload();
     } catch (err: any) {
       setConfigFeedback({ type: 'error', message: err.message || 'Erro ao salvar configurações do WhatsApp.' });
@@ -408,13 +416,25 @@ export const AdminWhatsApp: React.FC<AdminWhatsAppProps> = ({ clinic, appointmen
       setTemplateBooking(prev => prev + ' ' + variable);
     } else if (activeTemplateTab === 'd1') {
       setTemplateD1(prev => prev + ' ' + variable);
+    } else if (activeTemplateTab === 'birthday') {
+      setTemplateBirthday(prev => prev + ' ' + variable);
+    } else if (activeTemplateTab === 'special_occasion') {
+      setTemplateSpecialOccasion(prev => prev + ' ' + variable);
     } else {
       setTemplateD0(prev => prev + ' ' + variable);
     }
   };
 
   // Active template for live preview
-  const currentPreviewTemplate = activeTemplateTab === 'booking' ? templateBooking : activeTemplateTab === 'd1' ? templateD1 : templateD0;
+  const currentPreviewTemplate = activeTemplateTab === 'booking'
+    ? templateBooking
+    : activeTemplateTab === 'd1'
+    ? templateD1
+    : activeTemplateTab === 'birthday'
+    ? templateBirthday
+    : activeTemplateTab === 'special_occasion'
+    ? templateSpecialOccasion
+    : templateD0;
   const sampleDataPreview = {
     patientName: 'Mariana Silveira',
     patientPhone: '(93) 99126-5006',
@@ -771,10 +791,10 @@ export const AdminWhatsApp: React.FC<AdminWhatsAppProps> = ({ clinic, appointmen
               </div>
 
               {/* Template Tab Selector */}
-              <div className="flex items-center space-x-1 p-1 bg-slate-100 rounded-xl">
+              <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-xl">
                 <button
                   onClick={() => setActiveTemplateTab('d0')}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  className={`flex-1 min-w-[120px] py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
                     activeTemplateTab === 'd0' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -782,7 +802,7 @@ export const AdminWhatsApp: React.FC<AdminWhatsAppProps> = ({ clinic, appointmen
                 </button>
                 <button
                   onClick={() => setActiveTemplateTab('d1')}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  className={`flex-1 min-w-[120px] py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
                     activeTemplateTab === 'd1' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -790,11 +810,27 @@ export const AdminWhatsApp: React.FC<AdminWhatsAppProps> = ({ clinic, appointmen
                 </button>
                 <button
                   onClick={() => setActiveTemplateTab('booking')}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  className={`flex-1 min-w-[120px] py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
                     activeTemplateTab === 'booking' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   ✅ Confirmação Imediata
+                </button>
+                <button
+                  onClick={() => setActiveTemplateTab('birthday')}
+                  className={`flex-1 min-w-[120px] py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
+                    activeTemplateTab === 'birthday' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  🎂 Aniversário
+                </button>
+                <button
+                  onClick={() => setActiveTemplateTab('special_occasion')}
+                  className={`flex-1 min-w-[120px] py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
+                    activeTemplateTab === 'special_occasion' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  🌟 Follow-up & Engajamento
                 </button>
               </div>
 
@@ -855,6 +891,22 @@ export const AdminWhatsApp: React.FC<AdminWhatsAppProps> = ({ clinic, appointmen
                     className="w-full p-3.5 rounded-xl border border-slate-300 text-xs font-mono text-slate-800 focus:ring-2 focus:ring-emerald-500"
                   />
                 )}
+                {activeTemplateTab === 'birthday' && (
+                  <textarea
+                    rows={12}
+                    value={templateBirthday}
+                    onChange={(e) => setTemplateBirthday(e.target.value)}
+                    className="w-full p-3.5 rounded-xl border border-slate-300 text-xs font-mono text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                  />
+                )}
+                {activeTemplateTab === 'special_occasion' && (
+                  <textarea
+                    rows={12}
+                    value={templateSpecialOccasion}
+                    onChange={(e) => setTemplateSpecialOccasion(e.target.value)}
+                    className="w-full p-3.5 rounded-xl border border-slate-300 text-xs font-mono text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                  />
+                )}
               </div>
 
               <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
@@ -863,7 +915,9 @@ export const AdminWhatsApp: React.FC<AdminWhatsAppProps> = ({ clinic, appointmen
                   onClick={() => {
                     if (activeTemplateTab === 'd0') setTemplateD0(DEFAULT_WHATSAPP_TEMPLATES.reminderD0);
                     else if (activeTemplateTab === 'd1') setTemplateD1(DEFAULT_WHATSAPP_TEMPLATES.reminderD1);
-                    else setTemplateBooking(DEFAULT_WHATSAPP_TEMPLATES.bookingConfirmation);
+                    else if (activeTemplateTab === 'booking') setTemplateBooking(DEFAULT_WHATSAPP_TEMPLATES.bookingConfirmation);
+                    else if (activeTemplateTab === 'birthday') setTemplateBirthday(DEFAULT_WHATSAPP_TEMPLATES.birthday);
+                    else if (activeTemplateTab === 'special_occasion') setTemplateSpecialOccasion(DEFAULT_WHATSAPP_TEMPLATES.specialOccasion);
                   }}
                   className="text-emerald-700 hover:underline flex items-center space-x-1"
                 >
@@ -1049,7 +1103,12 @@ export const AdminWhatsApp: React.FC<AdminWhatsAppProps> = ({ clinic, appointmen
 
             {/* Automation Toggles */}
             <div className="space-y-2.5 pt-3 border-t border-slate-100">
-              <h5 className="text-xs font-bold text-slate-700 uppercase">Gatilhos Automáticos</h5>
+              <div className="flex items-center justify-between">
+                <h5 className="text-xs font-bold text-slate-700 uppercase">Gatilhos Automáticos & Engajamento</h5>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  Automação Ativa
+                </span>
+              </div>
 
               <label className="flex items-center space-x-2.5 p-2 rounded-xl hover:bg-slate-50 cursor-pointer">
                 <input
@@ -1085,6 +1144,44 @@ export const AdminWhatsApp: React.FC<AdminWhatsAppProps> = ({ clinic, appointmen
                 <span className="text-xs text-slate-700 font-medium">
                   Habilitar lembretes matinais do dia do atendimento (D-0) com rota do Google Maps
                 </span>
+              </label>
+
+              {/* NEW: Birthday Reminders Toggle */}
+              <label className="flex items-center space-x-2.5 p-2 rounded-xl hover:bg-slate-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoSendBirthday}
+                  onChange={(e) => setAutoSendBirthday(e.target.checked)}
+                  className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs text-slate-800 font-semibold flex items-center space-x-1.5">
+                    <span>🎂 Lembretes e Felicitações de Aniversário</span>
+                    <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">Engajamento</span>
+                  </span>
+                  <p className="text-[11px] text-slate-500 leading-tight">
+                    Dispara mensagem personalizada no aniversário do paciente para fidelização e carinho
+                  </p>
+                </div>
+              </label>
+
+              {/* NEW: Special Occasion Follow-ups Toggle */}
+              <label className="flex items-center space-x-2.5 p-2 rounded-xl hover:bg-slate-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoSendSpecialOccasion}
+                  onChange={(e) => setAutoSendSpecialOccasion(e.target.checked)}
+                  className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs text-slate-800 font-semibold flex items-center space-x-1.5">
+                    <span>🌟 Follow-up de Datas Especiais & Pós-Tratamento</span>
+                    <span className="text-[10px] text-teal-700 bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200">Retenção</span>
+                  </span>
+                  <p className="text-[11px] text-slate-500 leading-tight">
+                    Acompanhamento contínuo da evolução pós-sessão e reengajamento de pacientes
+                  </p>
+                </div>
               </label>
             </div>
 

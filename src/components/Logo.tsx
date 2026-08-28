@@ -13,15 +13,12 @@ export const Logo: React.FC<LogoProps> = ({
   className = '',
   size = 'md',
   showText = true,
-  logoUrl = '/src/assets/images/fisiolys_logo_brand_1785780140781.jpg',
   variant = 'light',
 }) => {
-  const [imgError, setImgError] = useState(false);
-
   const iconSizes = {
-    sm: 'w-8 h-8',
-    md: 'w-10 h-10',
-    lg: 'w-14 h-14',
+    sm: 'w-8 h-8 text-base',
+    md: 'w-10 h-10 text-xl',
+    lg: 'w-14 h-14 text-2xl',
   };
 
   const titleSizes = {
@@ -31,87 +28,63 @@ export const Logo: React.FC<LogoProps> = ({
   };
 
   const subtitleSizes = {
-    sm: 'text-[9px]',
-    md: 'text-[10px] sm:text-xs',
-    lg: 'text-xs sm:text-sm',
+    sm: 'text-[8px]',
+    md: 'text-[9px] sm:text-[10px]',
+    lg: 'text-xs',
   };
-
-  const renderVectorEmblem = () => (
-    <div className={`${iconSizes[size]} relative shrink-0 rounded-2xl bg-gradient-to-br from-[#23372B] via-[#31523D] to-[#1a2920] p-1 shadow-xs border border-[#D0A73B]/50 flex items-center justify-center overflow-hidden`}>
-      <svg
-        viewBox="0 0 100 100"
-        className="w-full h-full relative z-10 p-0.5"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <defs>
-          <linearGradient id="goldGradLogo" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#F5EED3" />
-            <stop offset="35%" stopColor="#D0A73B" />
-            <stop offset="70%" stopColor="#C49B28" />
-            <stop offset="100%" stopColor="#7E611D" />
-          </linearGradient>
-          <linearGradient id="leafGradLogo" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#82A350" />
-            <stop offset="100%" stopColor="#41612A" />
-          </linearGradient>
-        </defs>
-
-        {/* Monogram E & Fisiolys */}
-        <path
-          d="M 38 25 C 28 35, 25 55, 38 68 C 48 76, 62 70, 60 55 C 58 45, 48 48, 48 52 C 48 58, 56 62, 65 52 C 72 44, 65 30, 52 30 C 44 30, 40 36, 40 42 C 40 50, 52 56, 52 64 C 52 72, 42 76, 34 72"
-          stroke="url(#goldGradLogo)"
-          strokeWidth="5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {/* Leaf Vine Branches around bottom */}
-        <path
-          d="M 20 75 Q 32 82 45 80"
-          stroke="url(#leafGradLogo)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-        />
-        <path
-          d="M 55 80 Q 70 82 82 72"
-          stroke="url(#leafGradLogo)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-        />
-        <path d="M 25 74 C 23 70, 28 68, 29 73 Z" fill="url(#leafGradLogo)" />
-        <path d="M 35 79 C 33 75, 38 73, 39 78 Z" fill="url(#leafGradLogo)" />
-        <path d="M 65 78 C 67 73, 72 75, 69 80 Z" fill="url(#leafGradLogo)" />
-        <path d="M 75 74 C 78 70, 82 73, 78 77 Z" fill="url(#leafGradLogo)" />
-      </svg>
-    </div>
-  );
 
   return (
     <div className={`flex items-center space-x-3 ${className}`}>
-      {logoUrl && !imgError ? (
-        <img
-          src={getImageUrl(logoUrl)}
-          alt="Fisiolys Fisioterapia e Pilates"
-          onError={() => setImgError(true)}
-          className={`${iconSizes[size]} object-contain rounded-xl shadow-xs border border-[#D0A73B]/40 bg-white p-0.5`}
-        />
-      ) : (
-        renderVectorEmblem()
-      )}
+      {/* Circular Monogram Badge with serif "F" and botanical vine accent */}
+      <div className="relative shrink-0">
+        <div
+          className={`${iconSizes[size]} shrink-0 rounded-full border border-[#B08A3E]/60 bg-[#FAF7F0] flex items-center justify-center font-serif italic font-normal text-[#1B2E24] shadow-2xs relative z-10`}
+        >
+          <span>F</span>
+        </div>
+        {/* Subtle organic botanical vine accent */}
+        <svg
+          className="absolute -top-1.5 -left-1.5 w-6 h-6 pointer-events-none z-20"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M3 18C4.5 12 9 6 16 3"
+            stroke="#B08A3E"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M8 10C6 7 8 4 11 5C12 7 11 10 8 10Z"
+            fill="#2D533C"
+            opacity="0.9"
+          />
+          <path
+            d="M13 6C12 3 14 1 17 2C18 4 16 7 13 6Z"
+            fill="#B08A3E"
+            opacity="0.85"
+          />
+        </svg>
+      </div>
 
       {showText && (
         <div className="leading-tight">
           <div className="flex items-center space-x-1.5">
-            <span className={`font-serif font-extrabold tracking-tight ${titleSizes[size]} ${
-              variant === 'dark' ? 'text-white' : 'text-[#23372B]'
-            }`}>
+            <span
+              className={`font-serif font-bold tracking-tight ${titleSizes[size]} ${
+                variant === 'dark' ? 'text-[#FAF7F0]' : 'text-[#1B2E24]'
+              }`}
+            >
               Fisiolys
             </span>
-            <span className="w-1.5 h-1.5 rounded-full bg-[#D0A73B] inline-block shadow-2xs" />
           </div>
-          <p className={`font-sans tracking-widest uppercase font-bold ${subtitleSizes[size]} text-[#9E7F22]`}>
-            Fisioterapia e Pilates
+          <p
+            className={`font-sans tracking-[0.14em] uppercase font-medium ${subtitleSizes[size]} ${
+              variant === 'dark' ? 'text-[#DCC58F]' : 'text-[#7A7569]'
+            }`}
+          >
+            FISIOTERAPIA & PILATES · ALTAMIRA
           </p>
         </div>
       )}

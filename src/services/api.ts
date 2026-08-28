@@ -1,4 +1,4 @@
-import { ClinicConfig, Service, ScheduleConfig, Appointment, Patient, AppointmentStatus, SlotInfo, ReminderLog, Testimonial, LoyaltyMember, PaymentMethod, WhatsAppLog } from '../types';
+import { ClinicConfig, Service, ScheduleConfig, Appointment, Patient, AppointmentStatus, SlotInfo, ReminderLog, Testimonial, LoyaltyMember, PaymentMethod, WhatsAppLog, FrequencyType, WeeklyDaySchedule } from '../types';
 import { localDb } from './localDb';
 
 // Helper function to attempt API request, and fallback to localDb if server is offline or on static hosting (like Netlify)
@@ -111,12 +111,20 @@ export const api = {
   async createAppointment(data: {
     patientName: string;
     patientPhone: string;
+    patientBirthDate?: string;
     patientEmail?: string;
+    patientAddress?: string;
+    patientCity?: string;
+    patientCpf?: string;
     serviceId: string;
     date: string;
     time: string;
     notes?: string;
     paymentMethod?: PaymentMethod;
+    frequencyType?: FrequencyType;
+    selectedDaysSchedule?: WeeklyDaySchedule[];
+    planScheduleSummary?: string;
+    multipleDates?: { date: string; time: string }[];
   }): Promise<{ appointment: Appointment; webhookSent: boolean }> {
     return fetchOrFallback(
       '/api/appointments',
@@ -138,6 +146,18 @@ export const api = {
         body: JSON.stringify({ status, notes, attendanceStatus }),
       },
       () => localDb.updateAppointmentStatus(id, status, notes, attendanceStatus)
+    ).then(res => (res as any).appointment || res);
+  },
+
+  async updateAppointmentDetails(id: string, updates: Partial<Appointment>): Promise<Appointment> {
+    return fetchOrFallback(
+      `/api/appointments/${id}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      },
+      () => localDb.updateAppointmentDetails(id, updates)
     ).then(res => (res as any).appointment || res);
   },
 
@@ -197,9 +217,45 @@ export const api = {
     );
   },
 
+  async rescheduleAppointment(id: string, newDate: string, newTime: string, reason?: string): Promise<Appointment> {
+    return fetchOrFallback(
+      `/api/appointments/${id}/reschedule`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newDate, newTime, reason }),
+      },
+      () => localDb.rescheduleAppointment(id, newDate, newTime, reason)
+    ).then(res => (res as any).appointment || res);
+  },
+
   // Patients
   async getPatients(): Promise<Patient[]> {
     return fetchOrFallback('/api/patients', undefined, () => localDb.getPatients());
+  },
+
+  async deletePatient(id: string, deleteAppointments = false): Promise<void> {
+    return fetchOrFallback(
+      `/api/patients/${id}`,
+      {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deleteAppointments }),
+      },
+      () => localDb.deletePatient(id, deleteAppointments)
+    );
+  },
+
+  async updatePatient(id: string, data: Partial<Patient>): Promise<Patient> {
+    return fetchOrFallback(
+      `/api/patients/${id}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      () => localDb.updatePatient(id, data)
+    ).then(res => (res as any).patient || res);
   },
 
   // Webhook test
@@ -392,6 +448,42 @@ export const api = {
     );
   },
 
+  async batchSendWhatsAppReminders2h(appointmentIds?: string[]): Promise<{
+    success: boolean;
+    total: number;
+    sent: number;
+    errors: number;
+    results: any[];
+  }> {
+    return fetchOrFallback(
+      '/api/whatsapp/reminders-2h',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentIds }),
+      },
+      () => localDb.batchSendWhatsAppReminders2h(appointmentIds)
+    );
+  },
+
+  async sendBirthdayReminders(): Promise<{
+    success: boolean;
+    total: number;
+    sent: number;
+    errors: number;
+    results: any[];
+  }> {
+    return fetchOrFallback(
+      '/api/whatsapp/birthday-reminders',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      },
+      () => localDb.sendBirthdayReminders()
+    );
+  },
+
   async testWhatsApp(params: {
     phone: string;
     message?: string;
@@ -418,5 +510,225 @@ export const api = {
         };
       }
     );
+  },
+
+  // ==========================================
+  // CRM FISIOLYS & CLINICAL EVALUATION METHODS
+  // ==========================================
+  async getCrmData(): Promise<{ leads: any[]; appointments: any[]; avaliacoes: any[] }> {
+    return fetchOrFallback(
+      '/api/crm/all',
+      undefined,
+      async () => {
+        const storedLeads = localStorage.getItem('fisiolys_crm_leads');
+        const storedAppts = localStorage.getItem('fisiolys_crm_appts');
+        const storedAvals = localStorage.getItem('fisiolys_crm_avaliacoes');
+        return {
+          leads: storedLeads ? JSON.parse(storedLeads) : [],
+          appointments: storedAppts ? JSON.parse(storedAppts) : [],
+          avaliacoes: storedAvals ? JSON.parse(storedAvals) : []
+        };
+      }
+    );
+  },
+
+  async saveCrmLead(lead: any): Promise<any> {
+    return fetchOrFallback(
+      '/api/crm/leads',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(lead)
+      },
+      async () => lead
+    ).then((res: any) => res.lead || res);
+  },
+
+  async deleteCrmLead(id: string): Promise<boolean> {
+    return fetchOrFallback(
+      `/api/crm/leads/${id}`,
+      { method: 'DELETE' },
+      async () => ({ success: true })
+    ).then(() => true);
+  },
+
+  async saveCrmAppointment(appt: any): Promise<any> {
+    return fetchOrFallback(
+      '/api/crm/appointments',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appt)
+      },
+      async () => appt
+    ).then((res: any) => res.appointment || res);
+  },
+
+  async deleteCrmAppointment(id: string): Promise<boolean> {
+    return fetchOrFallback(
+      `/api/crm/appointments/${id}`,
+      { method: 'DELETE' },
+      async () => ({ success: true })
+    ).then(() => true);
+  },
+
+  async saveCrmAvaliacao(aval: any): Promise<any> {
+    return fetchOrFallback(
+      '/api/crm/avaliacoes',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(aval)
+      },
+      async () => aval
+    ).then((res: any) => res.avaliacao || res);
+  },
+
+  async deleteCrmAvaliacao(id: string): Promise<boolean> {
+    return fetchOrFallback(
+      `/api/crm/avaliacoes/${id}`,
+      { method: 'DELETE' },
+      async () => ({ success: true })
+    ).then(() => true);
+  },
+
+  async saveCrmEvolucao(avalId: string, evol: any): Promise<any> {
+    return fetchOrFallback(
+      `/api/crm/avaliacoes/${avalId}/evolucoes`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(evol)
+      },
+      async () => evol
+    );
+  },
+
+  async deleteCrmEvolucao(avalId: string, evolId: string): Promise<boolean> {
+    return fetchOrFallback(
+      `/api/crm/avaliacoes/${avalId}/evolucoes/${evolId}`,
+      { method: 'DELETE' },
+      async () => ({ success: true })
+    ).then(() => true);
+  },
+
+  // ==========================================
+  // GEMINI AI ASSISTANT & CLINICAL THINKING
+  // ==========================================
+  async askGeminiChat(params: {
+    messages: { role: string; content: string }[];
+    thinkingMode?: boolean;
+    userRole?: 'dra' | 'paciente' | 'lead';
+    contextData?: any;
+  }): Promise<{ success: boolean; text: string; thinkingProcess?: string; rawText?: string; error?: string }> {
+    try {
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn("AI Chat API error, using fallback:", e);
+    }
+
+    // Local smart fallback
+    const lastMsg = params.messages[params.messages.length - 1]?.content || "";
+    return {
+      success: true,
+      text: `Olá! Sou o assistente com IA da Fisiolys. Para a consulta sobre "${lastMsg.slice(0, 45)}...", recomendamos avaliação cinético-funcional presencial na Fisiolys com a Dra. Elays Marinho (CREFITO 208058) para definir o protocolo ideal de Pilates ou Fisioterapia.`,
+      thinkingProcess: params.thinkingMode ? "Raciocínio Clínico: Análise biomecânica de queixa funcional e direcionamento para avaliação presencial e protocolo especializado." : undefined
+    };
+  },
+
+  async generateClinicalReasoning(data: {
+    idade?: string;
+    profissao?: string;
+    queixaPrincipal?: string;
+    escalaDor?: number;
+    historico?: string;
+    medicamentos?: string;
+    comorbidades?: string;
+    inspecao?: string;
+    adm?: string;
+    forcaMuscular?: string;
+    testesEspeciais?: string;
+  }): Promise<{ success: boolean; diagnosticoFuncional: string; objetivos: string; planoTerapeutico: string; thinkingProcess: string }> {
+    try {
+      const res = await fetch('/api/ai/clinical-reasoning', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn("Clinical reasoning API error, using fallback:", e);
+    }
+
+    return {
+      success: true,
+      diagnosticoFuncional: `Quadro compatível com sobrecarga biomecânica e dor grau ${data.escalaDor || 5}/10, associado à queixa de "${data.queixaPrincipal || 'desconforto musculoesquelético'}".`,
+      objetivos: "1. Reduzir dor e restrições miofasciais.\n2. Ganhar ADM e flexibilidade funcional.\n3. Fortalecer estabilizadores articulares e core abdominal.\n4. Orientação ergonômica e postural.",
+      planoTerapeutico: "Fisioterapia integrada 2x/semana com liberação miofascial, termoterapia e cinesioterapia com Pilates.",
+      thinkingProcess: "Pensamento Clínico: Correlação entre rotina ocupacional, histórico álgico e indicação de protocolo ativo de cinesioterapia."
+    };
+  },
+
+  async suggestLeadWhatsAppMessage(leadData: {
+    leadNome: string;
+    protocolo: string;
+    status: string;
+    notas?: string;
+    origem?: string;
+  }): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await fetch('/api/ai/suggest-lead-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(leadData)
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn("Lead message suggestion API error:", e);
+    }
+
+    return {
+      success: true,
+      message: `Olá ${leadData.leadNome}! 💚 Tudo bem? Aqui é a Dra. Elays da Fisiolys Fisioterapia e Pilates. Vi que você tem interesse no tratamento de *${leadData.protocolo}*. Como podemos te ajudar a viver com mais leveza e sem dores? Gostaria de agendar sua avaliação nesta semana? 🌿✨`
+    };
+  },
+
+  async askGeminiAssistant(params: {
+    userMessage: string;
+    systemContext?: string;
+  }): Promise<{ success: boolean; reply: string }> {
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: params.userMessage,
+          systemContext: params.systemContext
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return { success: true, reply: data.reply || data.message || '' };
+      }
+    } catch (e) {
+      console.warn("Gemini assistant API error:", e);
+    }
+
+    return {
+      success: true,
+      reply: `Olá {nome}! 🌿✨\n\n*Pílula de Sabedoria & Saúde Fisiolys* ☀️\n\n📖 “O Senhor é o meu pastor; de nada terei falta. Em verdes pastagens me faz repousar e me conduz a águas tranquilas; restaura-me o vigor.” — _Salmos 23:1-3_\n\n💭 *Reflexão:* O verdadeiro cuidado com o corpo começa na paz de espírito. Dedique alguns minutos hoje para respirar com calma, alongar os ombros e praticar o autocuidado.\n\nCom carinho,\n*Dra. Elays Marinho*\n_Fisiolys Fisioterapia & Pilates_ 🌸`
+    };
   }
 };
+

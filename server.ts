@@ -2,14 +2,31 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
-import { initialServices, initialScheduleConfig, initialClinicConfig, initialAppointments, initialPatients, initialTestimonials, initialLoyaltyMembers } from './src/data/initialData';
-import { Service, ScheduleConfig, ClinicConfig, Appointment, Patient, ReminderLog, Testimonial, LoyaltyMember, WhatsAppLog } from './src/types';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { initialServices, initialScheduleConfig, initialClinicConfig, initialAppointments, initialPatients, initialTestimonials, initialLoyaltyMembers, initialCrmLeads, initialCrmAppointments, initialCrmAvaliacoes } from './src/data/initialData';
+import { Service, ScheduleConfig, ClinicConfig, Appointment, Patient, ReminderLog, Testimonial, LoyaltyMember, WhatsAppLog, CrmLead, CrmAppointmentItem, CrmAvaliacao, CrmEvolucao } from './src/types';
 import { interpolateWhatsAppTemplate, getWhatsAppDirectUrl, getWhatsAppWebUrl, cleanPhoneNumber, DEFAULT_WHATSAPP_TEMPLATES } from './src/utils/whatsappUtils';
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json());
+
+// Lazy Gemini AI Client Initialization
+let genAiClient: GoogleGenAI | null = null;
+function getGeminiClient(): GoogleGenAI | null {
+  if (!genAiClient && process.env.GEMINI_API_KEY) {
+    genAiClient = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+  }
+  return genAiClient;
+}
 
 // Simple DB JSON file persistence
 const DB_FILE = path.join(process.cwd(), 'data_store.json');
@@ -24,6 +41,9 @@ interface DatabaseSchema {
   testimonials?: Testimonial[];
   loyaltyMembers?: LoyaltyMember[];
   whatsappLogs?: WhatsAppLog[];
+  crmLeads?: CrmLead[];
+  crmAppointments?: CrmAppointmentItem[];
+  crmAvaliacoes?: CrmAvaliacao[];
 }
 
 function loadDatabase(): DatabaseSchema {
@@ -40,7 +60,10 @@ function loadDatabase(): DatabaseSchema {
         reminderLogs: parsed.reminderLogs || [],
         testimonials: parsed.testimonials || initialTestimonials,
         loyaltyMembers: parsed.loyaltyMembers || initialLoyaltyMembers,
-        whatsappLogs: parsed.whatsappLogs || []
+        whatsappLogs: parsed.whatsappLogs || [],
+        crmLeads: parsed.crmLeads || initialCrmLeads,
+        crmAppointments: parsed.crmAppointments || initialCrmAppointments,
+        crmAvaliacoes: parsed.crmAvaliacoes || initialCrmAvaliacoes
       };
     }
   } catch (err) {
@@ -55,7 +78,10 @@ function loadDatabase(): DatabaseSchema {
     reminderLogs: [],
     testimonials: initialTestimonials,
     loyaltyMembers: initialLoyaltyMembers,
-    whatsappLogs: []
+    whatsappLogs: [],
+    crmLeads: initialCrmLeads,
+    crmAppointments: initialCrmAppointments,
+    crmAvaliacoes: initialCrmAvaliacoes
   };
 }
 
@@ -190,14 +216,14 @@ app.get('/api/available-slots', (req, res) => {
     return res.json({ date: dateStr, dayName: dayConfig?.dayName || '', available: false, slots: [], reason: "Clínica fechada neste dia da semana" });
   }
 
-  // Current local date & time cutoff
-  const now = new Date();
-  const nowYear = now.getFullYear();
-  const nowMonth = String(now.getMonth() + 1).padStart(2, '0');
-  const nowDate = String(now.getDate()).padStart(2, '0');
+  // Current Brazil local date & time
+  const brazilNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const nowYear = brazilNow.getFullYear();
+  const nowMonth = String(brazilNow.getMonth() + 1).padStart(2, '0');
+  const nowDate = String(brazilNow.getDate()).padStart(2, '0');
   const currentDateStr = `${nowYear}-${nowMonth}-${nowDate}`;
-  const currentTotalMins = now.getHours() * 60 + now.getMinutes();
-  const minBookingMinsCutoff = currentTotalMins + 120; // 2 hours minimum advance booking requirement
+  const currentTotalMins = brazilNow.getHours() * 60 + brazilNow.getMinutes();
+  const minBookingMinsCutoff = currentTotalMins; // Only past hours of current day are marked as finished
 
   const isToday = dateStr === currentDateStr;
   const isPastDate = dateStr < currentDateStr;
@@ -346,7 +372,24 @@ app.get('/api/appointments', (req, res) => {
 });
 
 app.post('/api/appointments', async (req, res) => {
-  const { patientName, patientPhone, patientEmail, serviceId, date, time, notes, paymentMethod } = req.body;
+  const {
+    patientName,
+    patientPhone,
+    patientEmail,
+    patientBirthDate,
+    patientAddress,
+    patientCity,
+    patientCpf,
+    serviceId,
+    date,
+    time,
+    notes,
+    paymentMethod,
+    frequencyType,
+    selectedDaysSchedule,
+    planScheduleSummary,
+    multipleDates
+  } = req.body;
 
   if (!patientName || !patientPhone || !serviceId || !date || !time) {
     return res.status(400).json({ error: "Todos os campos obrigatórios devem ser preenchidos" });
@@ -358,21 +401,21 @@ app.post('/api/appointments', async (req, res) => {
     return res.status(404).json({ error: "Serviço não encontrado" });
   }
 
-  // Check 2 hours advance booking rule for today
-  const now = new Date();
-  const nowYear = now.getFullYear();
-  const nowMonth = String(now.getMonth() + 1).padStart(2, '0');
-  const nowDate = String(now.getDate()).padStart(2, '0');
+  // Check past hour booking rule for today in Brazil timezone
+  const brazilNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const nowYear = brazilNow.getFullYear();
+  const nowMonth = String(brazilNow.getMonth() + 1).padStart(2, '0');
+  const nowDate = String(brazilNow.getDate()).padStart(2, '0');
   const currentDateStr = `${nowYear}-${nowMonth}-${nowDate}`;
 
   if (date === currentDateStr) {
     const [appH, appM] = time.split(':').map(Number);
     const appMins = appH * 60 + appM;
-    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const nowMins = brazilNow.getHours() * 60 + brazilNow.getMinutes();
 
-    if (appMins < nowMins + 120) {
+    if (appMins < nowMins) {
       return res.status(400).json({
-        error: "Agendamentos online exigem no mínimo 2 horas de antecedência. Em caso de urgência, entre em contato diretamente pelo WhatsApp para solicitar um encaixe!"
+        error: "Este horário já passou no dia de hoje. Por favor, escolha um horário disponível!"
       });
     }
   }
@@ -399,33 +442,47 @@ app.post('/api/appointments', async (req, res) => {
     patientName: patientName.trim(),
     patientPhone: patientPhone.trim(),
     patientEmail: patientEmail ? patientEmail.trim() : undefined,
+    patientBirthDate: patientBirthDate || undefined,
+    patientAddress: patientAddress ? patientAddress.trim() : undefined,
+    patientCity: patientCity ? patientCity.trim() : undefined,
+    patientCpf: patientCpf ? patientCpf.trim() : undefined,
     serviceId: service.id,
     serviceName: service.name,
     servicePrice: service.price,
     durationMinutes: service.durationMinutes,
     date,
     time,
+    frequencyType: frequencyType || 'sessao_unica',
+    selectedDaysSchedule: selectedDaysSchedule || undefined,
+    planScheduleSummary: planScheduleSummary || undefined,
+    multipleDates: multipleDates || undefined,
     status: 'agendado',
     paymentMethod: paymentMethod || 'pix',
-    notes: notes ? notes.trim() : undefined,
+    notes: notes ? notes.trim() : (planScheduleSummary ? `Plano/Frequência: ${planScheduleSummary}` : undefined),
     createdAt: new Date().toISOString(),
     webhookSent: false
   };
 
   db.appointments.push(newAppt);
 
-  // Update or Create Patient record
+  // Update or Create Patient record with full registration data
   let patient = db.patients.find(p => p.phone === newAppt.patientPhone || p.name.toLowerCase() === newAppt.patientName.toLowerCase());
   if (patient) {
     patient.totalSessions += 1;
     patient.lastSessionDate = date;
-    if (patientEmail && !patient.email) patient.email = patientEmail;
+    if (patientEmail && !patient.email) patient.email = patientEmail.trim();
+    if (patientBirthDate && !patient.birthDate) patient.birthDate = patientBirthDate;
+    if (patientAddress && !patient.address) patient.address = patientAddress.trim();
+    if (patientCity && !patient.city) patient.city = patientCity.trim();
   } else {
     patient = {
       id: `pat-${Date.now()}`,
       name: newAppt.patientName,
       phone: newAppt.patientPhone,
       email: newAppt.patientEmail,
+      birthDate: patientBirthDate || undefined,
+      address: patientAddress ? patientAddress.trim() : undefined,
+      city: patientCity ? patientCity.trim() : 'Altamira - PA',
       firstSessionDate: date,
       lastSessionDate: date,
       totalSessions: 1,
@@ -576,6 +633,35 @@ app.patch('/api/appointments/:id', (req, res) => {
     return res.status(404).json({ error: "Agendamento não encontrado" });
   }
 
+  if (req.body.date) {
+    appt.date = req.body.date;
+  }
+  if (req.body.time) {
+    appt.time = req.body.time;
+  }
+  if (req.body.serviceId) {
+    appt.serviceId = req.body.serviceId;
+    const serv = db.services.find(s => s.id === req.body.serviceId);
+    if (serv) {
+      appt.serviceName = serv.name;
+      appt.servicePrice = serv.price;
+    }
+  }
+  if (req.body.serviceName) {
+    appt.serviceName = req.body.serviceName;
+  }
+  if (req.body.servicePrice !== undefined) {
+    appt.servicePrice = Number(req.body.servicePrice);
+  }
+  if (req.body.patientName) {
+    appt.patientName = req.body.patientName;
+  }
+  if (req.body.patientPhone) {
+    appt.patientPhone = req.body.patientPhone;
+  }
+  if (req.body.patientCpf !== undefined) {
+    appt.patientCpf = req.body.patientCpf;
+  }
   if (req.body.status) {
     appt.status = req.body.status;
     if (req.body.status === 'concluido') {
@@ -1596,6 +1682,659 @@ app.post('/api/whatsapp/test', async (req, res) => {
     directWebUrl,
     directAppUrl
   });
+});
+
+// 6. Birthday Reminders Dispatch
+app.post('/api/whatsapp/birthday-reminders', async (req, res) => {
+  if (!db.whatsappLogs) db.whatsappLogs = [];
+  const brazilNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const monthDay = `${String(brazilNow.getMonth() + 1).padStart(2, '0')}-${String(brazilNow.getDate()).padStart(2, '0')}`; // MM-DD
+
+  const birthdayPatients = db.patients.filter(p => {
+    if (!p.birthDate) return false;
+    const pMonthDay = p.birthDate.slice(5); // assuming YYYY-MM-DD
+    return pMonthDay === monthDay;
+  });
+
+  const template = db.clinic.whatsappTemplateBirthday || DEFAULT_WHATSAPP_TEMPLATES.birthday;
+  const provider = db.clinic.whatsappProvider || 'whatsapp_web';
+  const results: any[] = [];
+  let sentCount = 0;
+  let errorCount = 0;
+
+  for (const patient of birthdayPatients) {
+    const msg = interpolateWhatsAppTemplate(template, {
+      patientName: patient.name,
+      patientPhone: patient.phone,
+      serviceName: 'Fisioterapia e Pilates',
+      date: brazilNow.toISOString().split('T')[0],
+      time: '09:00',
+      clinicName: db.clinic.name,
+      managerName: db.clinic.managerName,
+      address: db.clinic.address,
+      city: db.clinic.city,
+    });
+
+    const dispatch = await sendWhatsAppMessageViaGateway(
+      provider,
+      db.clinic.whatsappApiUrl || '',
+      db.clinic.whatsappApiToken || '',
+      db.clinic.whatsappInstanceId || '',
+      patient.phone,
+      msg
+    );
+
+    if (dispatch.success) sentCount++;
+    else errorCount++;
+
+    const log: WhatsAppLog = {
+      id: `wlog-bday-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      patientName: patient.name,
+      patientPhone: patient.phone,
+      type: 'manual',
+      provider,
+      status: dispatch.status,
+      message: msg,
+      sentAt: new Date().toISOString(),
+      errorDetails: dispatch.details
+    };
+
+    db.whatsappLogs.unshift(log);
+    results.push({
+      patientId: patient.id,
+      patientName: patient.name,
+      phone: patient.phone,
+      status: dispatch.status,
+      details: dispatch.details,
+      directWebUrl: getWhatsAppWebUrl(patient.phone, msg)
+    });
+  }
+
+  saveDatabase(db);
+
+  res.json({
+    success: true,
+    total: birthdayPatients.length,
+    sent: sentCount,
+    errors: errorCount,
+    monthDay,
+    results
+  });
+});
+
+// 7. Special Occasion / Follow-up Dispatch
+app.post('/api/whatsapp/special-occasions', async (req, res) => {
+  const { patientIds, occasionName, customTemplate } = req.body;
+  if (!db.whatsappLogs) db.whatsappLogs = [];
+
+  const targetPatients = Array.isArray(patientIds) && patientIds.length > 0
+    ? db.patients.filter(p => patientIds.includes(p.id))
+    : db.patients;
+
+  const template = customTemplate || db.clinic.whatsappTemplateSpecialOccasion || DEFAULT_WHATSAPP_TEMPLATES.specialOccasion;
+  const provider = db.clinic.whatsappProvider || 'whatsapp_web';
+  const results: any[] = [];
+  let sentCount = 0;
+  let errorCount = 0;
+
+  for (const patient of targetPatients) {
+    const msg = interpolateWhatsAppTemplate(template, {
+      patientName: patient.name,
+      patientPhone: patient.phone,
+      serviceName: 'Fisioterapia & Pilates',
+      date: new Date().toISOString().split('T')[0],
+      time: '09:00',
+      clinicName: db.clinic.name,
+      managerName: db.clinic.managerName,
+      address: db.clinic.address,
+      city: db.clinic.city,
+    });
+
+    const dispatch = await sendWhatsAppMessageViaGateway(
+      provider,
+      db.clinic.whatsappApiUrl || '',
+      db.clinic.whatsappApiToken || '',
+      db.clinic.whatsappInstanceId || '',
+      patient.phone,
+      msg
+    );
+
+    if (dispatch.success) sentCount++;
+    else errorCount++;
+
+    const log: WhatsAppLog = {
+      id: `wlog-occ-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      patientName: patient.name,
+      patientPhone: patient.phone,
+      type: 'manual',
+      provider,
+      status: dispatch.status,
+      message: msg,
+      sentAt: new Date().toISOString(),
+      errorDetails: dispatch.details
+    };
+
+    db.whatsappLogs.unshift(log);
+    results.push({
+      patientId: patient.id,
+      patientName: patient.name,
+      phone: patient.phone,
+      status: dispatch.status,
+      details: dispatch.details,
+      directWebUrl: getWhatsAppWebUrl(patient.phone, msg)
+    });
+  }
+
+  saveDatabase(db);
+
+  res.json({
+    success: true,
+    occasionName: occasionName || 'Acompanhamento Especial',
+    total: targetPatients.length,
+    sent: sentCount,
+    errors: errorCount,
+    results
+  });
+});
+
+// 8. 2-Hour Reminders Dispatch
+app.post('/api/whatsapp/reminders-2h', async (req, res) => {
+  const { appointmentIds } = req.body;
+  if (!db.whatsappLogs) db.whatsappLogs = [];
+
+  const brazilNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const todayStr = brazilNow.toISOString().split('T')[0];
+  const currentTotalMins = brazilNow.getHours() * 60 + brazilNow.getMinutes();
+
+  let targetAppts = db.appointments.filter(a => a.date === todayStr && a.status === 'agendado');
+
+  if (Array.isArray(appointmentIds) && appointmentIds.length > 0) {
+    targetAppts = targetAppts.filter(a => appointmentIds.includes(a.id));
+  } else if (!appointmentIds) {
+    // Filter appointments occurring in approximately the next 2-3 hours (e.g. within 60 to 180 minutes)
+    targetAppts = targetAppts.filter(a => {
+      const [h, m] = a.time.split(':').map(Number);
+      const appMins = h * 60 + m;
+      const diff = appMins - currentTotalMins;
+      return diff >= 0 && diff <= 180;
+    });
+  }
+
+  const template = db.clinic.whatsappTemplateReminder2h || DEFAULT_WHATSAPP_TEMPLATES.reminder2h;
+  const provider = db.clinic.whatsappProvider || 'whatsapp_web';
+  const results: any[] = [];
+  let sentCount = 0;
+  let errorCount = 0;
+
+  for (const appt of targetAppts) {
+    const msg = interpolateWhatsAppTemplate(template, {
+      patientName: appt.patientName,
+      patientPhone: appt.patientPhone,
+      serviceName: appt.serviceName,
+      servicePrice: appt.servicePrice,
+      date: appt.date,
+      time: appt.time,
+      clinicName: db.clinic.name,
+      managerName: db.clinic.managerName,
+      address: db.clinic.address,
+      city: db.clinic.city,
+      paymentMethod: appt.paymentMethod,
+      notes: appt.notes
+    });
+
+    const dispatch = await sendWhatsAppMessageViaGateway(
+      provider,
+      db.clinic.whatsappApiUrl || '',
+      db.clinic.whatsappApiToken || '',
+      db.clinic.whatsappInstanceId || '',
+      appt.patientPhone,
+      msg
+    );
+
+    if (dispatch.success) sentCount++;
+    else errorCount++;
+
+    const log: WhatsAppLog = {
+      id: `wlog-2h-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      appointmentId: appt.id,
+      patientName: appt.patientName,
+      patientPhone: appt.patientPhone,
+      type: 'manual',
+      provider,
+      status: dispatch.status,
+      message: msg,
+      sentAt: new Date().toISOString(),
+      errorDetails: dispatch.details
+    };
+
+    db.whatsappLogs.unshift(log);
+    results.push({
+      appointmentId: appt.id,
+      patientName: appt.patientName,
+      phone: appt.patientPhone,
+      time: appt.time,
+      status: dispatch.status,
+      details: dispatch.details,
+      directWebUrl: getWhatsAppWebUrl(appt.patientPhone, msg)
+    });
+  }
+
+  saveDatabase(db);
+
+  res.json({
+    success: true,
+    total: targetAppts.length,
+    sent: sentCount,
+    errors: errorCount,
+    today: todayStr,
+    results
+  });
+});
+
+// ==========================================
+// CRM FISIOLYS & CLINICAL EVALUATION ENDPOINTS
+// ==========================================
+
+// 1. Get all CRM Data
+app.get('/api/crm/all', (req, res) => {
+  if (!db.crmLeads) db.crmLeads = initialCrmLeads;
+  if (!db.crmAppointments) db.crmAppointments = initialCrmAppointments;
+  if (!db.crmAvaliacoes) db.crmAvaliacoes = initialCrmAvaliacoes;
+
+  res.json({
+    leads: db.crmLeads,
+    appointments: db.crmAppointments,
+    avaliacoes: db.crmAvaliacoes
+  });
+});
+
+// 2. Leads Management
+app.post('/api/crm/leads', (req, res) => {
+  if (!db.crmLeads) db.crmLeads = initialCrmLeads;
+  const leadData: CrmLead = req.body;
+
+  if (!leadData.nome) {
+    return res.status(400).json({ error: "Nome do lead é obrigatório." });
+  }
+
+  if (leadData.id) {
+    const idx = db.crmLeads.findIndex(l => l.id === leadData.id);
+    if (idx !== -1) {
+      db.crmLeads[idx] = { ...db.crmLeads[idx], ...leadData };
+      saveDatabase(db);
+      return res.json({ success: true, lead: db.crmLeads[idx] });
+    }
+  }
+
+  const newLead: CrmLead = {
+    ...leadData,
+    id: leadData.id || `lead-${Date.now()}`,
+    criadoEm: leadData.criadoEm || new Date().toISOString()
+  };
+
+  db.crmLeads.unshift(newLead);
+  saveDatabase(db);
+  res.json({ success: true, lead: newLead });
+});
+
+app.delete('/api/crm/leads/:id', (req, res) => {
+  if (!db.crmLeads) db.crmLeads = initialCrmLeads;
+  db.crmLeads = db.crmLeads.filter(l => l.id !== req.params.id);
+  saveDatabase(db);
+  res.json({ success: true });
+});
+
+// 3. CRM Appointments Management
+app.post('/api/crm/appointments', (req, res) => {
+  if (!db.crmAppointments) db.crmAppointments = initialCrmAppointments;
+  const apptData: CrmAppointmentItem = req.body;
+
+  if (apptData.id) {
+    const idx = db.crmAppointments.findIndex(a => a.id === apptData.id);
+    if (idx !== -1) {
+      db.crmAppointments[idx] = { ...db.crmAppointments[idx], ...apptData };
+      saveDatabase(db);
+      return res.json({ success: true, appointment: db.crmAppointments[idx] });
+    }
+  }
+
+  const newAppt: CrmAppointmentItem = {
+    ...apptData,
+    id: apptData.id || `crm-app-${Date.now()}`
+  };
+
+  db.crmAppointments.unshift(newAppt);
+
+  // Update corresponding lead status to 'agendado' if leadId is set
+  if (newAppt.leadId && db.crmLeads) {
+    const lead = db.crmLeads.find(l => l.id === newAppt.leadId);
+    if (lead && lead.status !== 'paciente') {
+      lead.status = 'agendado';
+    }
+  }
+
+  saveDatabase(db);
+  res.json({ success: true, appointment: newAppt });
+});
+
+app.delete('/api/crm/appointments/:id', (req, res) => {
+  if (!db.crmAppointments) db.crmAppointments = initialCrmAppointments;
+  db.crmAppointments = db.crmAppointments.filter(a => a.id !== req.params.id);
+  saveDatabase(db);
+  res.json({ success: true });
+});
+
+// 4. CRM Clinical Evaluations (Avaliações) Management
+app.post('/api/crm/avaliacoes', (req, res) => {
+  if (!db.crmAvaliacoes) db.crmAvaliacoes = initialCrmAvaliacoes;
+  const avalData: CrmAvaliacao = req.body;
+
+  if (avalData.id) {
+    const idx = db.crmAvaliacoes.findIndex(a => a.id === avalData.id);
+    if (idx !== -1) {
+      db.crmAvaliacoes[idx] = { ...db.crmAvaliacoes[idx], ...avalData };
+      saveDatabase(db);
+      return res.json({ success: true, avaliacao: db.crmAvaliacoes[idx] });
+    }
+  }
+
+  const newAval: CrmAvaliacao = {
+    ...avalData,
+    id: avalData.id || `aval-${Date.now()}`,
+    evolucoes: Array.isArray(avalData.evolucoes) ? avalData.evolucoes : []
+  };
+
+  db.crmAvaliacoes.unshift(newAval);
+
+  // When an evaluation is registered for a lead, transition lead status to 'paciente'
+  if (newAval.leadId && db.crmLeads) {
+    const lead = db.crmLeads.find(l => l.id === newAval.leadId);
+    if (lead) {
+      lead.status = 'paciente';
+    }
+  }
+
+  saveDatabase(db);
+  res.json({ success: true, avaliacao: newAval });
+});
+
+app.delete('/api/crm/avaliacoes/:id', (req, res) => {
+  if (!db.crmAvaliacoes) db.crmAvaliacoes = initialCrmAvaliacoes;
+  db.crmAvaliacoes = db.crmAvaliacoes.filter(a => a.id !== req.params.id);
+  saveDatabase(db);
+  res.json({ success: true });
+});
+
+// 5. CRM Evoluções Management
+app.post('/api/crm/avaliacoes/:id/evolucoes', (req, res) => {
+  if (!db.crmAvaliacoes) db.crmAvaliacoes = initialCrmAvaliacoes;
+  const avalId = req.params.id;
+  const evolData: CrmEvolucao = req.body;
+
+  const aval = db.crmAvaliacoes.find(a => a.id === avalId);
+  if (!aval) {
+    return res.status(404).json({ error: "Ficha de avaliação não encontrada." });
+  }
+
+  if (!aval.evolucoes) aval.evolucoes = [];
+
+  if (evolData.id) {
+    const idx = aval.evolucoes.findIndex(e => e.id === evolData.id);
+    if (idx !== -1) {
+      aval.evolucoes[idx] = { ...aval.evolucoes[idx], ...evolData };
+      saveDatabase(db);
+      return res.json({ success: true, avaliacao: aval, evolucao: aval.evolucoes[idx] });
+    }
+  }
+
+  const newEvol: CrmEvolucao = {
+    ...evolData,
+    id: evolData.id || `ev-${Date.now()}`,
+    sessao: evolData.sessao || (aval.evolucoes.length + 1)
+  };
+
+  aval.evolucoes.unshift(newEvol);
+  saveDatabase(db);
+  res.json({ success: true, avaliacao: aval, evolucao: newEvol });
+});
+
+app.delete('/api/crm/avaliacoes/:id/evolucoes/:evolId', (req, res) => {
+  if (!db.crmAvaliacoes) db.crmAvaliacoes = initialCrmAvaliacoes;
+  const { id, evolId } = req.params;
+
+  const aval = db.crmAvaliacoes.find(a => a.id === id);
+  if (!aval) {
+    return res.status(404).json({ error: "Ficha de avaliação não encontrada." });
+  }
+
+  aval.evolucoes = aval.evolucoes.filter(e => e.id !== evolId);
+  saveDatabase(db);
+  res.json({ success: true, avaliacao: aval });
+});
+
+// ========================================================
+// GEMINI AI CHATBOT & CLINICAL THINKING ENGINE
+// ========================================================
+
+const SYSTEM_INSTRUCTION_FISIOLYS = `Você é o Assistente Clínico Inteligente da clínica Fisiolys Fisioterapia e Pilates, sob responsabilidade técnica da Dra. Elays Marinho (CREFITO-12 / 208058) em Altamira - Pará.
+
+DADOS DA CLÍNICA:
+- Nome: Fisiolys Fisioterapia e Pilates
+- Responsável: Dra. Elays Marinho (Fisioterapeuta Especialista, CREFITO-12 208058)
+- Endereço: Av. Coronel José Porfírio, nº 3025 - Recreio, Altamira - PA
+- WhatsApp: (93) 99126-5006
+- Serviços e Protocolos:
+  1. Pilates Clássico & Studio no solo e aparelhos (8 sessões/mês R$ 99; aula experimental R$ 49)
+  2. Fisioterapia Domiciliar personalizada (R$ 150/sessão)
+  3. Fisioterapia Pediátrica e desenvolvimento motor
+  4. Fisioterapia com ênfase em ABA (transtornos do neurodesenvolvimento e TEA)
+  5. Terapia Manual Integrada (liberação miofascial instrumental/manual, ventosaterapia, acupuntura sistêmica/auricular, dry needling)
+  6. Fisioterapia Respiratória (higiene brônquica, reexpansão pulmonar)
+  7. Reabilitação Pós-Operatória Ortopédica (coluna, joelho, ombro, quadril)
+  8. Clube de Fidelidade Recorrente (R$ 99/mês - saldo acumulativo familiar)
+  9. Saúde Corporativa e ergonomia
+
+MODO DE PENSAMENTO INTELIGENTE (RACIOCÍNIO CLÍNICO AVANÇADO):
+Quando ativado ou ao analisar casos clínicos, elabore um raciocínio sistemático e aprofundado antes de entregar a resposta final.
+Sempre que pertinente, divida sua resposta de forma clara:
+1. Se houver pensamento analítico solicitado, inclua a seção explicativa do raciocínio biomecânico, anatomofisiológico, red flags, diagnóstico cinético-funcional e plano terapêutico.
+2. Em seguida, forneça a resposta direta, empática, acolhedora e com embasamento científico, pronta para a Dra. Elays ou para o paciente.
+
+Mantenha sempre um tom profissional, acolhedor, ético e seguro. Nunca prescreva medicamentos alopáticos invasivos e sempre ressalte a importância da avaliação presencial com a Dra. Elays.`;
+
+// 1. Interactive Gemini Chatbot Endpoint with Thinking Mode
+app.post('/api/ai/chat', async (req, res) => {
+  const { messages, thinkingMode = true, userRole = 'dra', contextData } = req.body;
+
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: "O histórico de mensagens é obrigatório." });
+  }
+
+  const ai = getGeminiClient();
+  if (!ai) {
+    // Graceful fallback if GEMINI_API_KEY is not configured yet
+    const lastMsg = messages[messages.length - 1]?.content || "";
+    return res.json({
+      success: true,
+      text: `Olá! Sou o assistente clínico inteligente da Fisiolys. Para ativar o processamento em tempo real com raciocínio profundo via Gemini, certifique-se de configurar sua GEMINI_API_KEY no menu de segredos.\n\nCom base na sua solicitação sobre "${lastMsg.slice(0, 40)}...", posso auxiliar a Dra. Elays com condutas cinético-funcionais, elaboração de prontuários, planejamento de sessões de Pilates e esclarecimento de dúvidas dos pacientes!`,
+      thinkingProcess: thinkingMode ? "Raciocínio Clínico Local: Analisando queixa funcional e contextualizando com os protocolos da Fisiolys (Terapia Manual, Pilates Solo/Aparelhos, Domiciliar e Pediátrica)." : undefined
+    });
+  }
+
+  try {
+    const formattedContents = messages.map((m: any) => ({
+      role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
+      parts: [{ text: m.content || m.text || "" }]
+    }));
+
+    // Inject context info if available
+    let systemInstruction = SYSTEM_INSTRUCTION_FISIOLYS;
+    if (contextData) {
+      systemInstruction += `\n\nCONTEXTO DO CRM / PACIENTE ATUAL:\n${typeof contextData === 'string' ? contextData : JSON.stringify(contextData, null, 2)}`;
+    }
+    if (userRole === 'paciente') {
+      systemInstruction += `\n\nO interlocutor atual é um PACIENTE ou LEAD interessado em atendimento. Seja extremamente acolhedor, didático, explique como a Fisiolys pode aliviar o desconforto e convide-o a agendar a avaliação presencial com a Dra. Elays.`;
+    } else {
+      systemInstruction += `\n\nO interlocutor é a Dra. Elays ou equipe técnica da Fisiolys. Utilize terminologia fisioterapêutica e cinético-funcional precisa (ADM, goniometria, dermátomos, miótomos, cadeias musculares, cinesioterapia e biomecânica).`;
+    }
+
+    const config: any = {
+      systemInstruction
+    };
+
+    if (thinkingMode) {
+      config.thinkingConfig = {
+        thinkingLevel: ThinkingLevel.HIGH
+      };
+    }
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.7-flash',
+      contents: formattedContents,
+      config
+    });
+
+    const responseText = response.text || "Sem resposta gerada pelo modelo.";
+
+    // Extract thoughts or reasoning if demarcated, or generate structured clinical thought summary
+    let thinkingProcess: string | undefined = undefined;
+    let cleanText = responseText;
+
+    if (responseText.includes('[PENSAMENTO CLÍNICO]') || responseText.includes('**Pensamento Clínico:**')) {
+      // Split into thinking and final answer
+      const parts = responseText.split(/\[RESPOSTA\]|\*\*Resposta:\*\*/i);
+      if (parts.length > 1) {
+        thinkingProcess = parts[0].replace(/\[PENSAMENTO CLÍNICO\]|\*\*Pensamento Clínico:\*\*/gi, '').trim();
+        cleanText = parts[1].trim();
+      }
+    }
+
+    res.json({
+      success: true,
+      text: cleanText,
+      rawText: responseText,
+      thinkingProcess: thinkingProcess || (thinkingMode ? "Raciocínio clínico processado com sucesso via Gemini 3.7 Flash Thinking." : undefined)
+    });
+  } catch (error: any) {
+    console.error("Gemini AI API Error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Erro ao consultar o serviço de Inteligência Artificial Gemini.",
+      text: "Desculpe, ocorreu uma instabilidade momentânea na conexão com o Gemini. Por favor, tente novamente em alguns instantes."
+    });
+  }
+});
+
+// 2. Clinical Reasoning & Anamnesis Auto-Generation for Fisiolys
+app.post('/api/ai/clinical-reasoning', async (req, res) => {
+  const { idade, profissao, queixaPrincipal, escalaDor, historico, medicamentos, comorbidades, inspecao, adm, forcaMuscular, testesEspeciais } = req.body;
+
+  const ai = getGeminiClient();
+  if (!ai) {
+    // Intelligent local fallback
+    return res.json({
+      success: true,
+      diagnosticoFuncional: `Quadro compatível com sobrecarga mecânica postural e desequilíbrio miofascial com dor nível ${escalaDor || 5}/10, associado à queixa de "${queixaPrincipal || 'dor e limitação funcional'}".`,
+      objetivos: "1. Redução do quadro álgico e alívio de tensões miofasciais.\n2. Restauração da amplitude de movimento articular funcional.\n3. Fortalecimento da musculatura estabilizadora do Core e cadeia posterior.\n4. Reeducação postural e prevenção de recidivas.",
+      planoTerapeutico: "Fisioterapia especializada 2x por semana: Liberação miofascial manual/instrumental, recursos analgésicos e protocolo de cinesioterapia com Pilates clínico.",
+      thinkingProcess: "Análise biomecânica baseada nos dados fornecidos: correlação de postura, profissão e intensidade álgica."
+    });
+  }
+
+  try {
+    const prompt = `Analise os dados desta ficha de avaliação fisioterapêutica da Fisiolys e elabore:
+1. DIAGNÓSTICO CINÉTICO-FUNCIONAL (hipótese técnica clara e fundamentada)
+2. OBJETIVOS DO TRATAMENTO (metas a curto e médio prazo)
+3. PLANO TERAPÊUTICO PROPOSTO (técnicas manuais, cinesioterapia, Pilates, exercícios e frequência sugerida)
+
+DADOS DO PACIENTE:
+- Idade: ${idade || 'Não informada'}
+- Profissão: ${profissao || 'Não informada'}
+- Queixa Principal: ${queixaPrincipal || 'Dor/desconforto funcional'}
+- Escala de Dor Atual: ${escalaDor !== undefined ? escalaDor : 5}/10
+- Histórico Clínico / Cirurgias: ${historico || 'Nenhum histórico relatado'}
+- Medicamentos em uso: ${medicamentos || 'Nenhum'}
+- Comorbidades: ${comorbidades || 'Nenhuma relatada'}
+- Inspeção / Avaliação Postural: ${inspecao || 'Não especificada'}
+- Amplitude de Movimento (ADM): ${adm || 'Preservada com restrições álgicas'}
+- Força Muscular: ${forcaMuscular || 'Grau 4/5 funcional'}
+- Testes Especiais: ${testesEspeciais || 'Testes biomecânicos de estresse ligamentar e mobilidade'}
+
+Responda em formato JSON com as chaves:
+{
+  "thinkingProcess": "Explicação passo a passo do raciocínio biomecânico, anatômico e diagnóstico diferencial",
+  "diagnosticoFuncional": "Hipótese de diagnóstico cinético-funcional",
+  "objetivos": "Objetivos claros do tratamento (tópicos numerados)",
+  "planoTerapeutico": "Condutas detalhadas e frequência recomendada"
+}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.7-flash',
+      contents: prompt,
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION_FISIOLYS,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        responseMimeType: "application/json"
+      }
+    });
+
+    const jsonText = response.text?.trim() || "{}";
+    const parsed = JSON.parse(jsonText);
+
+    res.json({
+      success: true,
+      diagnosticoFuncional: parsed.diagnosticoFuncional || "",
+      objetivos: parsed.objetivos || "",
+      planoTerapeutico: parsed.planoTerapeutico || "",
+      thinkingProcess: parsed.thinkingProcess || "Raciocínio clínico estruturado com Gemini 3.7 Flash."
+    });
+  } catch (err: any) {
+    console.error("Clinical reasoning error:", err);
+    res.status(500).json({
+      success: false,
+      error: err.message || "Erro ao processar raciocínio clínico com IA."
+    });
+  }
+});
+
+// 3. WhatsApp Lead Smart Message Generator with Thinking
+app.post('/api/ai/suggest-lead-message', async (req, res) => {
+  const { leadNome, protocolo, status, notas, origem } = req.body;
+
+  const ai = getGeminiClient();
+  if (!ai) {
+    return res.json({
+      success: true,
+      message: `Olá ${leadNome || 'tudo bem'}! 💚 Aqui é a Dra. Elays Marinho da Fisiolys. Vi seu interesse no tratamento de *${protocolo || 'Fisioterapia'}*. Como você tem se sentido? Gostaria de tirar dúvidas ou agendar sua avaliação nesta semana? Estamos à disposição! 🌿`
+    });
+  }
+
+  try {
+    const prompt = `Gere uma mensagem acolhedora, empática e persuasiva de WhatsApp para enviar a este lead da clínica Fisiolys:
+- Nome do Lead: ${leadNome || 'Paciente'}
+- Protocolo de Interesse: ${protocolo || 'Fisioterapia / Pilates'}
+- Status no CRM: ${status || 'novo'}
+- Origem do Contato: ${origem || 'WhatsApp'}
+- Notas registradas: ${notas || 'Sem observações adicionais'}
+
+A mensagem deve ser assinada pela Dra. Elays Marinho / Fisiolys e conter emojis adequados e convite claro para agendar a avaliação presencial.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.7-flash',
+      contents: prompt,
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION_FISIOLYS,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: response.text?.trim() || ""
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // --- SERVER STARTUP AND VITE MIDDLEWARE ---

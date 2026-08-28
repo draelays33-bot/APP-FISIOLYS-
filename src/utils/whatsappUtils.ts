@@ -50,18 +50,58 @@ Passando para lembrar que o seu atendimento de *{servico}* na *{clinica}* é *HO
 📍 *Local:* {endereco} - {cidade}
 🗺️ *Ver no Mapa:* {maps_link}
 
-Recomendamos chegar com 5 a 10 minutos de antecedência. Estamos te aguardando com muito carinho! 🌿`
+Recomendamos chegar com 5 a 10 minutos de antecedência. Estamos te aguardando com muito carinho! 🌿`,
+
+  reminder2h: `Olá *{paciente}*! ⏰✨
+
+Passando para lembrar que seu atendimento de *{servico}* na *{clinica}* com a *{responsavel}* está marcado para *HOJE às {horario} hs* (daqui a aproximadamente 2 horas).
+
+📍 *Local:* {endereco} - {cidade}
+🗺️ *Rota no Google Maps:* {maps_link}
+
+💡 *Recomendação:* Procure chegar com 5 a 10 minutos de antecedência com roupas confortáveis.
+Caso precise de algum suporte com a recepção, responda aqui. Até logo! 🌿💚`,
+
+  birthday: `Olá *{paciente}*! 🎂🎉✨
+
+A equipe da *{clinica}* e a *{responsavel}* desejam a você um Feliz Aniversário repleto de saúde, vitalidade, leveza e muitas conquistas!
+
+Agradecemos imensamente por fazer parte da nossa história. Para celebrar o seu dia especial, preparamos um presente e condições exclusivas de autocuidado para sua próxima sessão! 🎁💚
+
+Tenha um dia maravilhoso e cheio de comemorações! 🌸🌿`,
+
+  specialOccasion: `Olá *{paciente}*! 💚✨
+
+Passando para acompanhar como você está se sentindo e como está a evolução do seu bem-estar desde sua última sessão de *{servico}* na *{clinica}*.
+
+Lembre-se que a regularidade dos exercícios e a atenção à postura fazem toda a diferença para viver sem dores e com máxima mobilidade. 
+
+Se precisar de qualquer orientação com a *{responsavel}* ou desejar agendar um horário nesta semana, basta responder esta mensagem! Estamos à sua disposição. 🌸🧘‍♀️`
 };
 
 export interface QuickReplyTemplate {
   id: string;
-  category: 'orientacao' | 'financeiro' | 'localizacao' | 'pontualidade' | 'pos_atendimento' | 'reagendamento' | 'livre';
+  category: 'orientacao' | 'financeiro' | 'localizacao' | 'pontualidade' | 'pos_atendimento' | 'reagendamento' | 'aniversario' | 'engajamento' | 'livre';
   title: string;
   badge: string;
   template: string;
 }
 
 export const DEFAULT_QUICK_REPLY_TEMPLATES: QuickReplyTemplate[] = [
+  {
+    id: 'felicitacao_aniversario',
+    category: 'aniversario',
+    title: '🎂 Felicitação de Aniversário Especial',
+    badge: '🎂 Aniversário',
+    template: `Olá *{paciente}*! 🎂🎉✨\n\nA *{clinica}* e a *{responsavel}* desejam a você um Feliz Aniversário repleto de saúde, movimento e momentos felizes!\n\nComo presente especial de aniversário, preparamos uma condição exclusiva para o seu próximo atendimento de *{servico}*. Venha comemorar cuidando de você! 🎁💚`
+  },
+  {
+    id: 'followup_reengajamento',
+    category: 'engajamento',
+    title: '🌟 Follow-up & Cuidado Continuado',
+    badge: '🌟 Follow-up',
+    template: `Olá *{paciente}*! 💚✨\n\nComo você tem se sentido nos últimos dias? Sentimos sua falta na *{clinica}*!\n\nManter a regularidade do seu tratamento é fundamental para consolidar os resultados e prevenir dores. Vamos agendar seu próximo horário com a *{responsavel}* para esta semana? 🌿`
+  },
   {
     id: 'orientacoes_pre',
     category: 'orientacao',

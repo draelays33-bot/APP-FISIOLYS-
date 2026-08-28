@@ -244,11 +244,11 @@ export const PrintableQRPDFModal: React.FC<PrintableQRPDFModalProps> = ({
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-black text-slate-900 flex items-center justify-between">
-                    <span>Tabela Oficial de Serviços e Tratamentos</span>
+                    <span>Guia de Serviços e Tratamentos (Conforme CREFITO-PA)</span>
                     {selectedType === 'catalog' && <CheckCircle2 className="w-3.5 h-3.5 text-[#31523D]" />}
                   </div>
                   <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                    Tabela com todos os tratamentos da Fisiolys, preços de investimento (Mensal/Sessão) e QR Code.
+                    Guia descritivo com todos os atendimentos da Fisiolys, normas éticas do CREFITO-12 e QR Code de agendamento.
                   </div>
                 </div>
               </button>

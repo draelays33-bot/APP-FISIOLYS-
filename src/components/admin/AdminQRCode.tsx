@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ClinicConfig } from '../../types';
-import { generateQRCodeDataUrl, getPublicAppUrl, getGoogleReviewUrl, getClinicMapUrl } from '../../utils/qrUtils';
+import { generateQRCodeDataUrl, getPublicAppUrl, getCheckInUrl, getGoogleReviewUrl, getClinicMapUrl } from '../../utils/qrUtils';
 import { generateQRPDF } from '../../utils/pdfGenerator';
 import { PrintableQRPDFModal } from '../common/PrintableQRPDFModal';
 import { api } from '../../services/api';
-import { QrCode, Copy, Share2, Download, Printer, Check, Sparkles, ExternalLink, Activity, RefreshCw, ShieldCheck, Star, MapPin, Smartphone, Save, Link as LinkIcon, FileText } from 'lucide-react';
+import { QrCode, Copy, Share2, Download, Printer, Check, Sparkles, ExternalLink, Activity, RefreshCw, ShieldCheck, Star, MapPin, Smartphone, Save, Link as LinkIcon, FileText, UserCheck } from 'lucide-react';
 import { GoogleGIcon } from '../public/DownloadAppQRSection';
 
 interface AdminQRCodeProps {
@@ -13,8 +13,8 @@ interface AdminQRCodeProps {
 
 export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
   const [currentClinic, setCurrentClinic] = useState<ClinicConfig>(clinic);
-  const [selectedPreset, setSelectedPreset] = useState<'app' | 'review' | 'map' | 'custom'>('app');
-  const [customLink, setCustomLink] = useState<string>(() => getPublicAppUrl(clinic.customAppUrl));
+  const [selectedPreset, setSelectedPreset] = useState<'checkin' | 'app' | 'review' | 'map' | 'custom'>('checkin');
+  const [customLink, setCustomLink] = useState<string>(() => getCheckInUrl(clinic.customAppUrl));
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
 
@@ -24,15 +24,17 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
   const [savingLinks, setSavingLinks] = useState<boolean>(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string>('');
 
+  const checkinUrl = getCheckInUrl(currentClinic.customAppUrl);
   const appUrl = getPublicAppUrl(currentClinic.customAppUrl);
   const reviewUrl = getGoogleReviewUrl(currentClinic.googleReviewUrl, currentClinic.address, currentClinic.city);
   const mapUrl = getClinicMapUrl(currentClinic.address, currentClinic.city);
 
   const getActiveTargetUrl = () => {
+    if (selectedPreset === 'checkin') return checkinUrl;
     if (selectedPreset === 'review') return reviewUrl;
     if (selectedPreset === 'map') return mapUrl;
     if (selectedPreset === 'app') return appUrl;
-    return customLink || appUrl;
+    return customLink || checkinUrl;
   };
 
   const publicLink = getActiveTargetUrl();
@@ -41,8 +43,9 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
     generateQRCodeDataUrl(publicLink).then((url) => setQrDataUrl(url));
   }, [publicLink]);
 
-  const handleSelectPreset = (preset: 'app' | 'review' | 'map') => {
+  const handleSelectPreset = (preset: 'checkin' | 'app' | 'review' | 'map') => {
     setSelectedPreset(preset);
+    if (preset === 'checkin') setCustomLink(checkinUrl);
     if (preset === 'app') setCustomLink(appUrl);
     if (preset === 'review') setCustomLink(reviewUrl);
     if (preset === 'map') setCustomLink(mapUrl);
@@ -55,8 +58,10 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
   };
 
   const handleShareWhatsApp = () => {
-    let msg = `Olá! Para agendar sua sessão de Pilates ou Fisioterapia no *${currentClinic.name}*, acesse nosso link de agendamento online:\n\n${publicLink}`;
-    if (selectedPreset === 'review') {
+    let msg = `Olá! Para realizar seu *Check-in Oficial* de chegada na recepção do *${currentClinic.name}*, aponte a câmera do seu celular para a placa ou acesse o link:\n\n${publicLink}`;
+    if (selectedPreset === 'app') {
+      msg = `Olá! Para agendar sua sessão de Pilates ou Fisioterapia no *${currentClinic.name}*, acesse nosso link de agendamento online:\n\n${publicLink}`;
+    } else if (selectedPreset === 'review') {
       msg = `Olá! Gostou do seu atendimento no *${currentClinic.name}*? Deixe sua avaliação de 5 Estrelas no Google! Ajuda muito nosso trabalho 💚:\n\n${publicLink}`;
     } else if (selectedPreset === 'map') {
       msg = `Olá! Aqui está a localização e rota no Google Maps para o *${currentClinic.name}* (${currentClinic.address}):\n\n${publicLink}`;
@@ -79,9 +84,10 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
   const handlePrintCard = async () => {
     setIsGeneratingPdf(true);
     try {
-      let pdfType: 'checkin' | 'review' | 'app' = 'app';
+      let pdfType: 'checkin' | 'review' | 'app' = 'checkin';
       if (selectedPreset === 'review') pdfType = 'review';
       else if (selectedPreset === 'app') pdfType = 'app';
+      else if (selectedPreset === 'checkin') pdfType = 'checkin';
 
       const doc = await generateQRPDF({
         type: pdfType,
@@ -124,12 +130,35 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
       <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
         <h3 className="text-lg font-bold text-slate-800">Gerador de Links e QR Codes da Clínica</h3>
         <p className="text-xs text-slate-500 mt-0.5">
-          Gere QR Codes para <strong>Agendamentos Online</strong>, <strong>Avaliações de 5 Estrelas no Google</strong> ou <strong>Localização no Google Maps</strong> para colocar no balcão da recepção, banners e placas de acrílico.
+          Gere QR Codes para <strong>Check-in Oficial da Recepção (Totem)</strong>, <strong>Agendamentos Online</strong>, <strong>Avaliações de 5 Estrelas no Google</strong> ou <strong>Localização no Google Maps</strong> para colocar no balcão da recepção, banners e placas de acrílico.
         </p>
       </div>
 
       {/* Preset Selector Tabs */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Preset 1: QR Code Oficial de Check-in */}
+        <button
+          type="button"
+          onClick={() => handleSelectPreset('checkin')}
+          className={`p-4 rounded-2xl border transition-all text-left cursor-pointer flex items-center space-x-3 ${
+            selectedPreset === 'checkin'
+              ? 'bg-[#31523D] text-white border-[#31523D] shadow-md ring-2 ring-[#D0A73B]/50'
+              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          <div className={`p-2.5 rounded-xl ${selectedPreset === 'checkin' ? 'bg-[#D0A73B] text-[#23372B]' : 'bg-emerald-100 text-emerald-800'}`}>
+            <UserCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <strong className="block text-xs font-black flex items-center gap-1">
+              <span>Check-in Recepção</span>
+              <span className="text-[10px] px-1.5 py-0.2 bg-[#D0A73B]/20 text-[#D0A73B] rounded-sm uppercase font-bold">Oficial</span>
+            </strong>
+            <span className="text-[11px] opacity-80">Totem / Balcão de Chegada</span>
+          </div>
+        </button>
+
+        {/* Preset 2: Link de Agendamento */}
         <button
           type="button"
           onClick={() => handleSelectPreset('app')}
@@ -148,6 +177,7 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
           </div>
         </button>
 
+        {/* Preset 3: Avaliação Google 5 Estrelas */}
         <button
           type="button"
           onClick={() => handleSelectPreset('review')}
@@ -169,6 +199,7 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
           </div>
         </button>
 
+        {/* Preset 4: Google Maps */}
         <button
           type="button"
           onClick={() => handleSelectPreset('map')}
@@ -194,7 +225,9 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
         <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-2xs space-y-5">
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
-              {selectedPreset === 'review' 
+              {selectedPreset === 'checkin'
+                ? '📍 Link Oficial de Check-in da Recepção'
+                : selectedPreset === 'review' 
                 ? '⭐ Link Direto para Avaliação 5 Estrelas no Google' 
                 : selectedPreset === 'map'
                 ? '📍 Link do Google Maps (Rota de Destino)'
@@ -209,16 +242,16 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
                   setSelectedPreset('custom');
                 }}
                 placeholder="https://..."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 font-mono text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-teal-600"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 font-mono text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#31523D]"
               />
               <button
                 id="btn-copy-public-link"
                 onClick={handleCopyLink}
-                className="px-4 py-2.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold shrink-0 flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer"
+                className="px-4 py-2.5 bg-[#31523D] hover:bg-[#23372B] text-white rounded-xl text-xs font-bold shrink-0 flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer"
               >
                 {copied ? (
                   <>
-                    <Check className="w-4 h-4 text-emerald-300" />
+                    <Check className="w-4 h-4 text-[#D0A73B]" />
                     <span>Copiado!</span>
                   </>
                 ) : (
@@ -232,11 +265,11 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
             <div className="flex items-center justify-between mt-1.5">
               <button
                 type="button"
-                onClick={() => handleSelectPreset('app')}
-                className="text-[11px] text-teal-700 hover:underline flex items-center space-x-1 font-medium cursor-pointer"
+                onClick={() => handleSelectPreset(selectedPreset === 'custom' ? 'checkin' : selectedPreset)}
+                className="text-[11px] text-[#31523D] hover:underline flex items-center space-x-1 font-medium cursor-pointer"
               >
                 <RefreshCw className="w-3 h-3" />
-                <span>Restaurar URL de Agendamento</span>
+                <span>Restaurar Link Original</span>
               </button>
               {copied && (
                 <p className="text-xs text-emerald-600 font-semibold animate-fade-in">
@@ -250,7 +283,7 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
             <button
               id="btn-share-whatsapp"
               onClick={handleShareWhatsApp}
-              className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center space-x-2 shadow-xs transition-all"
+              className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center space-x-2 shadow-xs transition-all cursor-pointer"
             >
               <Share2 className="w-4 h-4" />
               <span>Enviar Link via WhatsApp</span>
@@ -267,16 +300,20 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
             </a>
           </div>
 
-          <div className="p-4 bg-emerald-50/80 rounded-xl border border-emerald-200 text-xs text-emerald-950 space-y-1.5 shadow-2xs">
+          <div className="p-4 bg-emerald-50/80 rounded-xl border border-emerald-200 text-xs text-emerald-950 space-y-2 shadow-2xs">
             <p className="font-extrabold flex items-center space-x-1.5 text-emerald-800">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>QR Code Otimizado para Leitura Mobile sem Bloqueios:</span>
+              <span>Como escanear no iPhone (iOS):</span>
             </p>
-            <p className="leading-relaxed">
-              O QR Code foi configurado para direcionar à <strong>URL pública de acesso</strong> (sem requisições de cookies internos de desenvolvimento). Assim, qualquer câmera de celular abre a página de agendamento instantaneamente!
-            </p>
-            <p className="font-semibold text-emerald-800 pt-1">💡 Dica de Divulgação:</p>
-            <p>Cole este link na bio do Instagram do seu studio de Pilates ou clínica de Fisioterapia para permitir agendamentos 24 horas por dia!</p>
+            <ol className="list-decimal list-inside space-y-1 text-slate-700 leading-relaxed font-medium">
+              <li>Abra o aplicativo nativo <strong>Câmera</strong> do iPhone.</li>
+              <li>Aponte a lente para o QR Code (mantenha a cerca de 20 a 30 cm de distância).</li>
+              <li>Toque no <strong>balão amarelo do Safari</strong> que surge na tela com o endereço da clínica.</li>
+              <li>A página de <strong>Check-in</strong> abrirá instantaneamente para o paciente digitar o telefone ou selecionar seu nome!</li>
+            </ol>
+            <div className="p-2.5 bg-white rounded-lg border border-emerald-300/80 text-[11px] text-[#23372B]">
+              📱 <strong>Dica:</strong> Se o seu iPhone estiver com o leitor de QR Code desativado, basta ir em <em>Ajustes &gt; Câmera &gt; Ativar "Escanear Códigos QR"</em>.
+            </div>
           </div>
         </div>
 
@@ -285,34 +322,46 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
           
           <div className="w-full">
             <div className="inline-flex items-center space-x-2 bg-slate-100 px-3 py-1 rounded-full text-xs font-bold text-slate-700 mb-3">
-              <Activity className="w-3.5 h-3.5 text-teal-600" />
+              <Activity className="w-3.5 h-3.5 text-emerald-700" />
               <span>{clinic.name}</span>
             </div>
 
             <h4 className="text-base font-extrabold text-slate-800">
-              Escaneie o QR Code para Agendar
+              {selectedPreset === 'checkin'
+                ? 'Escaneie para Fazer seu Check-in'
+                : selectedPreset === 'review'
+                ? 'Avalie nosso Atendimento no Google'
+                : selectedPreset === 'map'
+                ? 'Localização e Rota no Google Maps'
+                : 'Escaneie o QR Code para Agendar'}
             </h4>
             <p className="text-xs text-slate-500 mt-0.5">
-              Aponte a câmera do seu celular para escolher o horário
+              {selectedPreset === 'checkin'
+                ? 'Aponte a câmera do seu celular para confirmar sua presença na recepção'
+                : selectedPreset === 'review'
+                ? 'Deixe sua nota de 5 estrelas e ajude outros pacientes'
+                : selectedPreset === 'map'
+                ? 'Abra a rota da clínica diretamente no GPS do seu smartphone'
+                : 'Aponte a câmera do seu celular para escolher o horário'}
             </p>
 
             {/* QR Image Box */}
             <div
               onClick={() => window.open(publicLink, '_blank')}
-              title="Clique para abrir a página do paciente em nova aba"
-              className="my-5 p-4 bg-white border-2 border-dashed border-teal-200 hover:border-teal-600 rounded-2xl inline-block shadow-xs cursor-pointer group transition-all transform hover:scale-105"
+              title="Clique para testar o QR Code em nova aba"
+              className="my-5 p-4 bg-white border-2 border-dashed border-[#31523D]/30 hover:border-[#31523D] rounded-2xl inline-block shadow-xs cursor-pointer group transition-all transform hover:scale-105"
             >
               {qrDataUrl ? (
                 <div className="relative">
                   <img
                     src={qrDataUrl}
-                    alt="QR Code de Agendamento"
+                    alt="QR Code Oficial de Check-in e Serviços"
                     className="w-48 h-48 mx-auto"
                   />
-                  <div className="absolute inset-0 bg-teal-900/10 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-xl transition-opacity">
-                    <span className="bg-teal-800 text-white px-3 py-1 rounded-full text-xs font-bold shadow-md flex items-center space-x-1">
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Abrir Link</span>
+                  <div className="absolute inset-0 bg-[#31523D]/10 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-xl transition-opacity">
+                    <span className="bg-[#31523D] text-white px-3 py-1 rounded-full text-xs font-bold shadow-md flex items-center space-x-1">
+                      <ExternalLink className="w-3.5 h-3.5 text-[#D0A73B]" />
+                      <span>Abrir Check-in</span>
                     </span>
                   </div>
                 </div>
@@ -371,7 +420,7 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
       {/* Dedicated Form for Clinic Link Settings */}
       <form onSubmit={handleSaveClinicLinks} className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-2xs space-y-4">
         <div className="flex items-center space-x-2 border-b border-slate-100 pb-3">
-          <div className="p-2 bg-teal-50 text-teal-700 rounded-xl">
+          <div className="p-2 bg-emerald-50 text-emerald-800 rounded-xl">
             <LinkIcon className="w-5 h-5" />
           </div>
           <div>
@@ -398,7 +447,7 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
               value={editReviewUrl}
               onChange={(e) => setEditReviewUrl(e.target.value)}
               placeholder="Ex: https://g.page/r/suaclinica/review ou https://maps.app.goo.gl/..."
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-teal-600"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[#31523D]"
             />
             <p className="text-[11px] text-slate-500 mt-1">
               Cole o link da página do Google Meu Negócio onde o paciente é levado direto para dar 5 estrelas.
@@ -414,7 +463,7 @@ export const AdminQRCode: React.FC<AdminQRCodeProps> = ({ clinic }) => {
               value={editAppUrl}
               onChange={(e) => setEditAppUrl(e.target.value)}
               placeholder="Ex: https://fisiolys.app ou https://fisiolys.com.br"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-teal-600"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[#31523D]"
             />
             <p className="text-[11px] text-slate-500 mt-1">
               Se você possui um domínio próprio configurado, insira-o para gerar o QR Code com seu próprio endereço.

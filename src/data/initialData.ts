@@ -8,6 +8,9 @@ export const initialClinicConfig: ClinicConfig = {
   address: "Av. Coronel José Porfírio, nº 3025 - Recreio",
   city: "Altamira - Pará",
   managerName: "Dra. Elays Marinho",
+  managerCpf: "931.614.092-72",
+  managerCrefito: "CREFITO-12",
+  logoUrl: "/src/assets/images/fisiolys_logo_official_1787403576890.jpg",
   webhookUrl: "https://n8n.webhook.site/v1/agendamento-fisiolys",
   webhookEnabled: true,
   googleReviewUrl: "https://www.google.com/search?q=Fisiolys+Fisioterapia+e+Pilates+Altamira+Avaliar+no+Google",
@@ -20,6 +23,8 @@ export const initialClinicConfig: ClinicConfig = {
   whatsappAutoSendBooking: true,
   whatsappAutoSendReminderD1: true,
   whatsappAutoSendReminderD0: true,
+  whatsappAutoSendBirthday: true,
+  whatsappAutoSendSpecialOccasion: true,
   whatsappTemplateBooking: `Olá *{paciente}*! 💚✨
 
 Seu agendamento na *{clinica}* foi registrado com sucesso!
@@ -52,7 +57,21 @@ Passando para lembrar que o seu atendimento de *{servico}* na *{clinica}* é *HO
 📍 *Local:* {endereco} - {cidade}
 🗺️ *Ver no Mapa:* {maps_link}
 
-Recomendamos chegar com 5 a 10 minutos de antecedência. Estamos te aguardando com muito carinho! 🌿`
+Recomendamos chegar com 5 a 10 minutos de antecedência. Estamos te aguardando com muito carinho! 🌿`,
+  whatsappTemplateBirthday: `Olá *{paciente}*! 🎂🎉✨
+
+A equipe da *{clinica}* e a *{responsavel}* desejam a você um Feliz Aniversário repleto de saúde, vitalidade, leveza e muitas conquistas!
+
+Agradecemos imensamente por fazer parte da nossa história. Para celebrar o seu dia especial, preparamos um presente e condições exclusivas de autocuidado para sua próxima sessão! 🎁💚
+
+Tenha um dia maravilhoso e cheio de comemorações! 🌸🌿`,
+  whatsappTemplateSpecialOccasion: `Olá *{paciente}*! 💚✨
+
+Passando para acompanhar como você está se sentindo e como está a evolução do seu bem-estar desde sua última sessão de *{servico}* na *{clinica}*.
+
+Lembre-se que a regularidade dos exercícios e a atenção à postura fazem toda a diferença para viver sem dores e com máxima mobilidade. 
+
+Se precisar de qualquer orientação com a *{responsavel}* ou desejar agendar um horário nesta semana, basta responder esta mensagem! Estamos à sua disposição. 🌸🧘‍♀️`
 };
 
 export const initialServices: Service[] = [
@@ -590,4 +609,329 @@ export const initialLoyaltyMembers: LoyaltyMember[] = [
     createdAt: "2025-11-20T11:00:00Z"
   }
 ];
+
+// --- INITIAL CRM & CLINICAL EVALUATION DATA ---
+import { CrmLead, CrmAppointmentItem, CrmAvaliacao } from '../types';
+
+export const initialCrmLeads: CrmLead[] = [
+  {
+    id: "lead-1",
+    nome: "Mariana Alencar",
+    telefone: "(93) 99122-3344",
+    protocolo: "Pilates clássico",
+    status: "conversa",
+    prioridade: "media",
+    origem: "WhatsApp",
+    notas: "Queixa de dores na região lombar após longas horas de trabalho sentado. Tem interesse em 2x por semana à tarde.",
+    criadoEm: "2026-08-20T14:30:00Z"
+  },
+  {
+    id: "lead-2",
+    nome: "João Paulo Ribeiro",
+    telefone: "(93) 99155-7788",
+    protocolo: "Terapia Manual (miofascial/ventosa/acupuntura)",
+    status: "agendado",
+    prioridade: "alta",
+    origem: "Instagram",
+    notas: "Atleta amador de corrida. Tensão na musculatura dos gastrocnêmios e fáscia plantar.",
+    criadoEm: "2026-08-21T09:15:00Z"
+  },
+  {
+    id: "lead-3",
+    nome: "Fernanda Vasconcelos",
+    telefone: "(93) 99199-4411",
+    protocolo: "Fisioterapia Pediátrica",
+    status: "paciente",
+    prioridade: "alta",
+    origem: "Indicação Médica",
+    notas: "Mãe do paciente Enzo (4 anos). Acompanhamento de desenvolvimento psicomotor e alinhamento postural.",
+    criadoEm: "2026-08-15T11:00:00Z"
+  },
+  {
+    id: "lead-4",
+    nome: "Ricardo Lima Santos",
+    telefone: "(93) 99133-8822",
+    protocolo: "Pós-Operatório",
+    status: "novo",
+    prioridade: "alta",
+    origem: "WhatsApp",
+    notas: "Cirurgia de menisco no joelho direito há 3 semanas. Liberado pelo ortopedista para fisioterapia.",
+    criadoEm: "2026-08-23T08:20:00Z"
+  }
+];
+
+export const initialCrmAppointments: CrmAppointmentItem[] = [
+  {
+    id: "crm-app-1",
+    leadId: "lead-2",
+    leadNomeAvulso: "",
+    protocolo: "Terapia Manual (miofascial/ventosa/acupuntura)",
+    data: "2026-08-24",
+    horario: "15:00",
+    situacao: "confirmado"
+  },
+  {
+    id: "crm-app-2",
+    leadId: "lead-1",
+    leadNomeAvulso: "",
+    protocolo: "Pilates clássico",
+    data: "2026-08-25",
+    horario: "09:00",
+    situacao: "pendente"
+  }
+];
+
+export const initialCrmAvaliacoes: CrmAvaliacao[] = [
+  {
+    id: "aval-mariana",
+    pacienteId: "pat-1",
+    pacienteNome: "Mariana Silva Santos",
+    pacienteCpf: "341.892.108-45",
+    telefone: "(11) 99876-5432",
+    idade: "32",
+    profissao: "Arquiteta / Home Office",
+    data: "2026-07-25",
+    avaliador: "Dra. Elays Marinho (CREFITO 208058)",
+    queixaPrincipal: "Dores recorrentes na região cervical e lombar (queimação) após mais de 6h em trabalho sentado no computador.",
+    historico: "Quadro com início insidioso há 8 meses. Sem histórico de cirurgias ou traumas graves. Piora no final da tarde e em períodos de alta demanda profissional.",
+    medicamentos: "Relaxante muscular esporádico (sob prescrição)",
+    comorbidades: "Nenhuma comorbidade sistêmica",
+    escalaDor: 6,
+    inspecao: "Postura com anteriorização da cabeça (3cm), rotação interna de ombros e retificação da curva lombar fisiológica.",
+    adm: "Cervical: flexão e rotação lateral limitadas nos últimos 15 graus por tensão em trapézio superior e elevador da escápula. Lombar: flexão 70°.",
+    forcaMuscular: "Core abdominal e multífidos grau 3+/5. Estabilizadores escapulares hipotônicos.",
+    testesEspeciais: "Teste de Spurling negativo, Teste de Adams sem gibosidade estrutural, Teste de Thomas com leve encurtamento de iliopsoas bilateral.",
+    diagnosticoFuncional: "Síndrome dolorosa miofascial cervicotorácica e instabilidade lombar por hipoatividade de estabilizadores centrais.",
+    objetivos: "Alívio completo do quadro álgico, reeducação postural biomecânica, fortalecimento do Core (Powerhouse) e ganho de flexibilidade global.",
+    planoTerapeutico: "Pilates Clínico em aparelhos (Reformer, Cadillac, Chair) 2x por semana + orientações ergonômicas de posto de trabalho.",
+    frequenciaSemanal: "2x por semana (Terças e Quintas às 08:00)",
+    valorTratamento: "R$ 480,00 / mês (Pacote 8 sessões)",
+    formaPagamento: "PIX / Cartão Recorrente",
+    termoImagemVozAceito: true,
+    termoImagemVozTipo: "completo",
+    termoImagemVozData: "2026-07-25T09:30:00Z",
+    assinaturaPacienteUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='60'><path d='M10 40 Q 40 10, 80 35 T 150 25 T 190 30' stroke='%231B2E24' stroke-width='2' fill='none'/><text x='15' y='55' font-size='10' font-family='sans-serif' fill='%23736B5E'>Mariana S. Santos</text></svg>",
+    assinaturaProfissionalUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='60'><path d='M15 45 Q 60 5, 110 30 T 170 15' stroke='%23B08A3E' stroke-width='2.2' fill='none'/><text x='20' y='55' font-size='9' font-family='sans-serif' fill='%231B2E24'>Dra. Elays Marinho CREFITO-12</text></svg>",
+    assinaturaData: "2026-07-25T09:35:10Z",
+    assinaturaHash: "FISIO-MARI-792B8-2026",
+    examesAnexados: [
+      {
+        id: "ex-mari-1",
+        nome: "Ressonância Magnética Coluna Cervical",
+        tipo: "ressonancia",
+        data: "2026-07-20",
+        arquivoUrl: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=800",
+        tamanhoFormatado: "2.4 MB (PDF/Imagem)",
+        observacoes: "Laudo: Leve protrusão discal em C5-C6 sem compressão de raízes nervosas. Discopatia incipiente."
+      },
+      {
+        id: "ex-mari-2",
+        nome: "Raio-X de Coluna Lombar (AP e Perfil)",
+        tipo: "raio_x",
+        data: "2026-07-15",
+        arquivoUrl: "https://images.unsplash.com/photo-1530497610245-94d3c16cda28?auto=format&fit=crop&q=80&w=800",
+        tamanhoFormatado: "1.8 MB (DICOM/JPG)",
+        observacoes: "Laudo: Retificação da lordose lombar fisiológica com alinhamento dos corpos vertebrais preservado."
+      }
+    ],
+    evolucoes: [
+      {
+        id: "ev-m-1",
+        data: "2026-07-28",
+        sessao: 1,
+        totalSessoesPlano: 8,
+        presencaStatus: "presente",
+        quantidadeRealizada: "1/8",
+        procedimentos: "Sessão introdutória de respiração diafragmática, ativação de transverso do abdômen no Reformer (Footwork) e mobilização de coluna em flexão suave.",
+        dorAntes: 6,
+        dorDepois: 3,
+        observacoes: "Paciente assimilou com facilidade o padrão respiratório e relatou sensação imediata de alívio cervical."
+      },
+      {
+        id: "ev-m-2",
+        data: "2026-07-30",
+        sessao: 2,
+        totalSessoesPlano: 8,
+        presencaStatus: "presente",
+        quantidadeRealizada: "2/8",
+        procedimentos: "Exercícios no Cadillac: The Roll Down com barra móvel, mobilização escapular com molas leves e alongamento em cadeia posterior.",
+        dorAntes: 4,
+        dorDepois: 2,
+        observacoes: "Excelente resposta na descompressão toracolombar. Sem queixa de dormência ou parestesia."
+      },
+      {
+        id: "ev-m-3",
+        data: "2026-08-04",
+        sessao: 3,
+        totalSessoesPlano: 8,
+        presencaStatus: "presente",
+        quantidadeRealizada: "3/8",
+        procedimentos: "Fortalecimento de extensores de tronco na Wunda Chair (Swan prep) e dissociação escapuloumeral.",
+        dorAntes: 3,
+        dorDepois: 1,
+        observacoes: "Paciente relata que conseguiu passar a semana de trabalho sem crises de dor na cervical."
+      },
+      {
+        id: "ev-m-4",
+        data: "2026-08-06",
+        sessao: 4,
+        totalSessoesPlano: 8,
+        presencaStatus: "presente",
+        quantidadeRealizada: "4/8",
+        procedimentos: "Trabalho proprioceptivo de Core no Barrel (Arm Reach e Spine Stretch) + liberação miofascial manual em trapézio e suboccipitais.",
+        dorAntes: 2,
+        dorDepois: 0,
+        observacoes: "Dor zerada pós-atendimento. Mobilidade cervical completa sem restrições."
+      }
+    ]
+  },
+  {
+    id: "aval-carlos",
+    pacienteId: "pat-2",
+    pacienteNome: "Carlos Eduardo Oliveira",
+    pacienteCpf: "219.450.812-90",
+    telefone: "(11) 98111-2233",
+    idade: "41",
+    profissao: "Engenheiro Civil",
+    data: "2026-08-01",
+    avaliador: "Dra. Elays Marinho (CREFITO 208058)",
+    queixaPrincipal: "Pós-operatório de reconstrução de menisco medial em joelho direito (há 4 semanas). Limitação para descer escadas.",
+    historico: "Lesão esportiva durante partida de futebol amador. Artroscopia realizada com sucesso. Encaminhado pelo ortopedista com liberação para carga parcial.",
+    medicamentos: "Anti-inflamatório concluído há 10 dias",
+    comorbidades: "Nenhuma",
+    escalaDor: 5,
+    inspecao: "Cicatrizes artroscópicas limpas e em fase de maturação. Edema periarticular moderado (+/4+).",
+    adm: "Flexão de joelho direito ativa: 95° (contralateral: 135°). Extensão completa a 0°.",
+    forcaMuscular: "Quadríceps direito grau 3+/5, Glúteo médio 4/5.",
+    testesEspeciais: "Teste de Lachman negativo, Teste de gaveta anterior negativo, Teste de Appley pós-cirúrgico não indicado.",
+    diagnosticoFuncional: "Déficit de amplitude de movimento e hipotrofia de quadríceps direito secundária à imobilização pós-cirúrgica.",
+    objetivos: "Recuperar arco de movimento completo (120°+), reabsorver edema residual, hipertrofia de quadríceps e isquiotibiais e treino de marcha fluida.",
+    planoTerapeutico: "Fisioterapia Ortopédica e Funcional 3x/semana com eletroestimulação (FES/Russas), cinesioterapia progressiva e treino neuromuscular.",
+    frequenciaSemanal: "3x por semana (Segundas, Quartas e Sextas às 09:00)",
+    valorTratamento: "R$ 1.500,00 (Pacote 10 sessões)",
+    formaPagamento: "PIX Parcelado",
+    termoImagemVozAceito: true,
+    termoImagemVozTipo: "cientifico_apenas",
+    termoImagemVozData: "2026-08-01T10:00:00Z",
+    assinaturaPacienteUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='60'><path d='M12 35 Q 50 15, 90 40 T 160 20' stroke='%231B2E24' stroke-width='2' fill='none'/><text x='15' y='55' font-size='10' font-family='sans-serif' fill='%23736B5E'>Carlos E. Oliveira</text></svg>",
+    assinaturaProfissionalUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='60'><path d='M15 45 Q 60 5, 110 30 T 170 15' stroke='%23B08A3E' stroke-width='2.2' fill='none'/><text x='20' y='55' font-size='9' font-family='sans-serif' fill='%231B2E24'>Dra. Elays Marinho CREFITO-12</text></svg>",
+    assinaturaData: "2026-08-01T10:15:00Z",
+    assinaturaHash: "FISIO-CARL-884A1-2026",
+    examesAnexados: [
+      {
+        id: "ex-carl-1",
+        nome: "Ressonância Magnética Joelho Direito (Pós-Op)",
+        tipo: "ressonancia",
+        data: "2026-07-28",
+        arquivoUrl: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=800",
+        tamanhoFormatado: "3.1 MB",
+        observacoes: "Laudo pós-cirúrgico: Menisco medial suturado com bom aspecto de ancoragem. Ligamento cruzado anterior íntegro."
+      },
+      {
+        id: "ex-carl-2",
+        nome: "Laudo Médico Ortopédico de Liberação",
+        tipo: "laudo_medico",
+        data: "2026-07-30",
+        arquivoUrl: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&q=80&w=800",
+        tamanhoFormatado: "1.2 MB",
+        observacoes: "Dr. Marcelo Ramos (CRM-PA 12890): Encaminho para reabilitação com foco em ganho de ADM e trofismo muscular."
+      }
+    ],
+    evolucoes: [
+      {
+        id: "ev-c-1",
+        data: "2026-08-03",
+        sessao: 1,
+        totalSessoesPlano: 10,
+        presencaStatus: "presente",
+        quantidadeRealizada: "1/10",
+        procedimentos: "Crioterapia inicial, mobilização patelar em todos os quadrantes, exercícios isométricos de quadríceps (SLR) e ganho de flexão passiva até 100°.",
+        dorAntes: 5,
+        dorDepois: 2,
+        observacoes: "Boa tolerância aos exercícios sem queixa de falseio articular."
+      },
+      {
+        id: "ev-c-2",
+        data: "2026-08-05",
+        sessao: 2,
+        totalSessoesPlano: 10,
+        presencaStatus: "presente",
+        quantidadeRealizada: "2/10",
+        procedimentos: "Fortalecimento em cadeia cinética fechada (mini-squats a 45°), ponte de glúteos e bicicleta ergométrica estacionária sem carga por 12 min.",
+        dorAntes: 3,
+        dorDepois: 1,
+        observacoes: "Ganho de arco para 110° de flexão ativa. Paciente já deambula sem claudicação perceptível."
+      }
+    ]
+  },
+  {
+    id: "aval-enzo",
+    leadId: "lead-3",
+    leadNomeAvulso: "Enzo Vasconcelos",
+    pacienteNome: "Enzo Vasconcelos",
+    pacienteCpf: "123.456.789-00",
+    idade: "4",
+    profissao: "Estudante Infantil",
+    data: "2026-08-15",
+    avaliador: "Dra. Elays Marinho (CREFITO 208058)",
+    queixaPrincipal: "Dificuldade na coordenação motora fina e marcha com base alargada.",
+    historico: "Nascimento a termo, sem intercorrências no parto. Apresenta atraso leve no marco de equilíbrio unipodal.",
+    medicamentos: "Nenhum",
+    comorbidades: "Nenhuma",
+    escalaDor: 0,
+    inspecao: "Postura com anteversão pélvica leve, pés planos flexíveis bilaterais.",
+    adm: "ADM completa e livre em todos os eixos dos membros inferiores e superiores.",
+    forcaMuscular: "Grau 4/5 global, necessitando de fortalecimento de Core e estabilizadores de tornozelo.",
+    testesEspeciais: "Teste de equilíbrio estático de Romberg adaptado, Teste de Gowers negativo.",
+    diagnosticoFuncional: "Hipotonia postural leve e déficit de integração sensório-motora.",
+    objetivos: "Melhorar equilíbrio dinâmico, fortalecer estabilizadores do tronco e favorecer arco plantar longitudinal.",
+    planoTerapeutico: "Fisioterapia neurofuncional e pediátrica lúdica 2x/semana + orientações domiciliares.",
+    frequenciaSemanal: "2x por semana",
+    termoImagemVozAceito: true,
+    termoImagemVozTipo: "completo",
+    termoImagemVozData: "2026-08-15T11:30:00Z",
+    assinaturaPacienteUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='60'><path d='M10 40 Q 50 10, 90 40 T 170 20' stroke='%231B2E24' stroke-width='2' fill='none'/><text x='15' y='55' font-size='10' font-family='sans-serif' fill='%23736B5E'>Fernanda Vasconcelos (Mãe)</text></svg>",
+    assinaturaProfissionalUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='60'><path d='M15 45 Q 60 5, 110 30 T 170 15' stroke='%23B08A3E' stroke-width='2.2' fill='none'/><text x='20' y='55' font-size='9' font-family='sans-serif' fill='%231B2E24'>Dra. Elays Marinho CREFITO-12</text></svg>",
+    assinaturaData: "2026-08-15T11:45:00Z",
+    assinaturaHash: "FISIO-ENZO-441B2-2026",
+    examesAnexados: [
+      {
+        id: "ex-enzo-1",
+        nome: "Avaliação do Desenvolvimento Neuromotor (Relatório)",
+        tipo: "laudo_medico",
+        data: "2026-08-10",
+        arquivoUrl: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&q=80&w=800",
+        tamanhoFormatado: "1.5 MB",
+        observacoes: "Neuropediatra: Encaminhamento para estimulação psicomotora global e integração sensório-motora."
+      }
+    ],
+    evolucoes: [
+      {
+        id: "ev-1",
+        data: "2026-08-18",
+        sessao: 1,
+        totalSessoesPlano: 10,
+        presencaStatus: "presente",
+        quantidadeRealizada: "1/10",
+        procedimentos: "Circuito proprioceptivo lúdico no tatame e disco de equilíbrio. Estímulo tátil e treino de marcha em linha reta.",
+        dorAntes: 0,
+        dorDepois: 0,
+        observacoes: "Paciente participativo e muito receptivo aos estímulos visuais e táteis."
+      },
+      {
+        id: "ev-2",
+        data: "2026-08-22",
+        sessao: 2,
+        totalSessoesPlano: 10,
+        presencaStatus: "presente",
+        quantidadeRealizada: "2/10",
+        procedimentos: "Fortalecimento de extensores de tronco na bola suíça e salto bipedal sobre obstáculos baixos.",
+        dorAntes: 0,
+        dorDepois: 0,
+        observacoes: "Excelente evolução no tempo de sustentação em apoio monopodal."
+      }
+    ]
+  }
+];
+
 
