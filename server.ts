@@ -883,25 +883,128 @@ app.delete('/api/appointments/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// 6. Patients Management
+// Reschedule appointment endpoint
+app.post('/api/appointments/:id/reschedule', (req, res) => {
+  const { newDate, newTime, reason } = req.body;
+  const appt = db.appointments.find(a => a.id === req.params.id);
+  if (!appt) {
+    return res.status(404).json({ error: "Agendamento não encontrado" });
+  }
+
+  if (!newDate || !newTime) {
+    return res.status(400).json({ error: "Nova data e novo horário são obrigatórios" });
+  }
+
+  const oldDate = appt.date;
+  const oldTime = appt.time;
+  appt.date = newDate;
+  appt.time = newTime;
+  appt.status = 'agendado';
+  appt.attendanceStatus = 'pendente';
+  const reasonText = reason ? `: ${reason}` : '';
+  const rescheduleLog = `[Remarcado de ${oldDate} às ${oldTime} para ${newDate} às ${newTime}${reasonText}]`;
+  appt.notes = appt.notes ? `${appt.notes} ${rescheduleLog}` : rescheduleLog;
+
+  syncPatientStats(appt.patientPhone);
+  syncPatientStats(appt.patientName);
+
+  saveDatabase(db);
+  res.json({ success: true, appointment: appt, message: "Atendimento reagendado com sucesso!" });
+});
+
+// 6. Patients Management with Categories & Color Tags
 app.get('/api/patients', (req, res) => {
   res.json(db.patients);
 });
 
 app.post('/api/patients', (req, res) => {
   const newPatient: Patient = {
-    id: `pat-${Date.now()}`,
+    id: req.body.id || `pat-${Date.now()}`,
     name: req.body.name,
     phone: req.body.phone,
-    email: req.body.email,
-    notes: req.body.notes,
+    email: req.body.email || '',
+    cpf: req.body.cpf || undefined,
+    birthDate: req.body.birthDate || undefined,
+    address: req.body.address || undefined,
+    city: req.body.city || 'Altamira - PA',
+    category: req.body.category || 'fisioterapia',
+    colorTag: req.body.colorTag || 'emerald',
+    tags: req.body.tags || [],
+    statusTag: req.body.statusTag || 'Ativo',
+    notes: req.body.notes || '',
     totalSessions: req.body.totalSessions || 0,
+    totalFaltas: req.body.totalFaltas || 0,
     firstSessionDate: req.body.firstSessionDate || new Date().toISOString().split('T')[0],
+    lastSessionDate: req.body.lastSessionDate || undefined,
     createdAt: new Date().toISOString()
   };
-  db.patients.push(newPatient);
+  db.patients.unshift(newPatient);
   saveDatabase(db);
   res.json({ success: true, patient: newPatient });
+});
+
+app.patch('/api/patients/:id', (req, res) => {
+  const patient = db.patients.find(p => p.id === req.params.id);
+  if (!patient) {
+    return res.status(404).json({ error: "Paciente não encontrado" });
+  }
+
+  if (req.body.name) patient.name = req.body.name;
+  if (req.body.phone) patient.phone = req.body.phone;
+  if (req.body.email !== undefined) patient.email = req.body.email;
+  if (req.body.cpf !== undefined) patient.cpf = req.body.cpf;
+  if (req.body.birthDate !== undefined) patient.birthDate = req.body.birthDate;
+  if (req.body.address !== undefined) patient.address = req.body.address;
+  if (req.body.city !== undefined) patient.city = req.body.city;
+  if (req.body.category !== undefined) patient.category = req.body.category;
+  if (req.body.colorTag !== undefined) patient.colorTag = req.body.colorTag;
+  if (req.body.tags !== undefined) patient.tags = req.body.tags;
+  if (req.body.statusTag !== undefined) patient.statusTag = req.body.statusTag;
+  if (req.body.notes !== undefined) patient.notes = req.body.notes;
+  if (req.body.totalSessions !== undefined) patient.totalSessions = Number(req.body.totalSessions);
+  if (req.body.totalFaltas !== undefined) patient.totalFaltas = Number(req.body.totalFaltas);
+
+  saveDatabase(db);
+  res.json({ success: true, patient });
+});
+
+app.delete('/api/patients/:id', (req, res) => {
+  const deleteAppts = req.body?.deleteAppointments ?? true;
+  const pat = db.patients.find(p => p.id === req.params.id);
+  
+  if (pat && deleteAppts) {
+    const cleanPhone = pat.phone.replace(/\D/g, '');
+    const patNameLower = pat.name.toLowerCase();
+    db.appointments = db.appointments.filter(a => {
+      const aPhoneClean = a.patientPhone.replace(/\D/g, '');
+      const matchPhone = cleanPhone && aPhoneClean && aPhoneClean.includes(cleanPhone);
+      const matchName = a.patientName.toLowerCase() === patNameLower;
+      return !matchPhone && !matchName;
+    });
+  }
+
+  db.patients = db.patients.filter(p => p.id !== req.params.id);
+  saveDatabase(db);
+  res.json({ success: true });
+});
+
+// Supabase & Database Sync Status Endpoint
+app.get('/api/supabase/status', (req, res) => {
+  const hasEnv = Boolean(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL);
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.VITE_ADMIN_EMAIL || 'dra.elays33@gmail.com';
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+
+  res.json({
+    connected: hasEnv,
+    provider: hasEnv ? 'supabase_cloud' : 'vercel_local_persistent',
+    supabaseUrl: supabaseUrl ? `${supabaseUrl.slice(0, 24)}...` : undefined,
+    adminEmail,
+    patientCount: db.patients.length,
+    appointmentCount: db.appointments.length,
+    serviceCount: db.services.length,
+    loyaltyCount: db.loyaltyMembers?.length || 0,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // 7. Webhook Manual Test Route

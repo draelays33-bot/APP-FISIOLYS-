@@ -281,20 +281,20 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
       return;
     }
     try {
-      const reasonNote = presenceRescheduleReason ? `: ${presenceRescheduleReason}` : '';
-      await api.updateAppointmentDetails(presenceRescheduleAppt.id, {
-        date: presenceNewDate,
-        time: presenceNewTime,
-        status: 'agendado',
-        notes: `${presenceRescheduleAppt.notes || ''} [Reagendado pelo paciente para ${presenceNewDate} às ${presenceNewTime}${reasonNote}]`
-      });
+      await api.rescheduleAppointment(
+        presenceRescheduleAppt.id,
+        presenceNewDate,
+        presenceNewTime,
+        presenceRescheduleReason || 'Reagendado pelo paciente'
+      );
       // Update local appointments list immediately
       setPresencePatientAppointments(prev => prev.map(a => 
         a.id === presenceRescheduleAppt.id 
-          ? { ...a, date: presenceNewDate, time: presenceNewTime } 
+          ? { ...a, date: presenceNewDate, time: presenceNewTime, status: 'agendado', attendanceStatus: 'pendente' } 
           : a
       ));
       setPresenceRescheduleSuccess(true);
+      setPresenceFeedbackMsg('');
       if (onBookingSuccess) onBookingSuccess();
     } catch (e) {
       console.error(e);

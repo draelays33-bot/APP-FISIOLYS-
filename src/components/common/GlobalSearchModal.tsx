@@ -25,8 +25,9 @@ interface GlobalSearchModalProps {
   appointments: Appointment[];
   services: Service[];
   loyaltyMembers: LoyaltyMember[];
-  clinic: ClinicConfig | null;
-  onNavigateToView: (view: 'public' | 'services' | 'patient_portal' | 'admin', extraParams?: { tab?: string; query?: string; service?: Service }) => void;
+  clinic?: ClinicConfig | null;
+  onNavigate?: (type: string, item: any) => void;
+  onNavigateToView?: (view: 'public' | 'services' | 'patient_portal' | 'admin' | 'crm', extraParams?: { tab?: string; query?: string; service?: Service }) => void;
 }
 
 type SearchCategory = 'all' | 'patients' | 'appointments' | 'services' | 'loyalty';
@@ -39,11 +40,27 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   services,
   loyaltyMembers,
   clinic,
+  onNavigate,
   onNavigateToView,
 }) => {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<SearchCategory>('all');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Universal navigator that supports both onNavigateToView and onNavigate
+  const handleItemSelect = (
+    type: 'patient' | 'appointment' | 'service' | 'loyalty',
+    item: any,
+    targetView: 'public' | 'patient_portal' | 'admin',
+    extraParams?: { tab?: string; query?: string; service?: Service }
+  ) => {
+    onClose();
+    if (onNavigateToView) {
+      onNavigateToView(targetView, extraParams);
+    } else if (onNavigate) {
+      onNavigate(type, item);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -267,8 +284,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                       <div
                         key={patient.id}
                         onClick={() => {
-                          onClose();
-                          onNavigateToView('patient_portal', { query: patient.name });
+                          handleItemSelect('patient', patient, 'patient_portal', { query: patient.name });
                         }}
                         className="p-3 bg-white hover:bg-[#F5EED3]/30 rounded-2xl border border-slate-200 hover:border-[#D0A73B] transition-all cursor-pointer group shadow-2xs flex flex-col justify-between"
                       >
@@ -317,8 +333,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                       <div
                         key={appt.id}
                         onClick={() => {
-                          onClose();
-                          onNavigateToView('admin', { tab: 'agenda' });
+                          handleItemSelect('appointment', appt, 'admin', { tab: 'agenda' });
                         }}
                         className="p-3 bg-white hover:bg-emerald-50/50 rounded-2xl border border-slate-200 hover:border-emerald-500 transition-all cursor-pointer group shadow-2xs"
                       >
@@ -376,8 +391,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                       <div
                         key={service.id}
                         onClick={() => {
-                          onClose();
-                          onNavigateToView('public', { service });
+                          handleItemSelect('service', service, 'public', { service });
                         }}
                         className="p-3 bg-white hover:bg-[#F5EED3]/40 rounded-2xl border border-slate-200 hover:border-[#D0A73B] transition-all cursor-pointer group shadow-2xs flex flex-col justify-between"
                       >
@@ -425,8 +439,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                       <div
                         key={member.id}
                         onClick={() => {
-                          onClose();
-                          onNavigateToView('admin', { tab: 'fidelidade' });
+                          handleItemSelect('loyalty', member, 'admin', { tab: 'fidelidade' });
                         }}
                         className="p-3 bg-white hover:bg-emerald-50/40 rounded-2xl border border-slate-200 hover:border-emerald-500 transition-all cursor-pointer group shadow-2xs"
                       >

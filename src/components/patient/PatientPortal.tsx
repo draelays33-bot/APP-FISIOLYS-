@@ -220,12 +220,12 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
     if (!rescheduleModalAppt || !rescheduleNewDate || !rescheduleNewTime) return;
     setIsRescheduling(true);
     try {
-      await api.updateAppointmentDetails(rescheduleModalAppt.id, {
-        date: rescheduleNewDate,
-        time: rescheduleNewTime,
-        status: 'agendado',
-        notes: `${rescheduleModalAppt.notes || ''} [Reagendado pelo paciente no portal para ${rescheduleNewDate} às ${rescheduleNewTime}${rescheduleNotes ? `: ${rescheduleNotes}` : ''}]`
-      });
+      await api.rescheduleAppointment(
+        rescheduleModalAppt.id,
+        rescheduleNewDate,
+        rescheduleNewTime,
+        rescheduleNotes || 'Reagendado pelo paciente no portal'
+      );
       setRescheduleSuccess(true);
       if (onReload) onReload();
     } catch (e) {

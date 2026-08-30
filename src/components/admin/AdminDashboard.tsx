@@ -48,7 +48,11 @@ import {
   X,
   Settings,
   Brain,
-  ClipboardList
+  ClipboardList,
+  Tag,
+  Palette,
+  Database,
+  BookOpen
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -92,13 +96,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [agendaSubTab, setAgendaSubTab] = useState<'calendario' | 'horarios' | 'tarefas'>(
     initialTab === 'horarios' ? 'horarios' : 'calendario'
   );
-  const [prontuarioSubTab, setProntuarioSubTab] = useState<'avaliacoes' | 'evolucoes' | 'pacientes' | 'tcle'>(
+  const [prontuarioSubTab, setProntuarioSubTab] = useState<'avaliacoes' | 'evolucoes' | 'pacientes' | 'tcle' | 'templates'>(
     initialTab === 'pacientes' ? 'pacientes' : 'avaliacoes'
   );
   const [financeiroSubTab, setFinanceiroSubTab] = useState<'visao_geral' | 'pagamentos' | 'fidelidade'>(
     initialTab === 'fidelidade' ? 'fidelidade' : 'visao_geral'
   );
-  const [crmSubTab, setCrmSubTab] = useState<'leads' | 'whatsapp' | 'webhook' | 'ia_clinica'>(
+  const [crmSubTab, setCrmSubTab] = useState<'leads' | 'whatsapp' | 'webhook' | 'ia_clinica' | 'templates'>(
     initialTab === 'whatsapp' ? 'whatsapp' : initialTab === 'webhook' ? 'webhook' : 'leads'
   );
 
@@ -522,7 +526,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <strong className="text-purple-900 font-bold">{activeLoyaltyCount}</strong> no Clube Fidelidade R$ 99
               </p>
             </div>
-            <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-between items-center">
+            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+              <button
+                id="btn-card-goto-pacientes-tags"
+                onClick={() => {
+                  setActiveTab('prontuario');
+                  setProntuarioSubTab('pacientes');
+                }}
+                className="text-xs font-bold text-[#1B2E24] hover:text-teal-900 flex items-center space-x-1 hover:underline cursor-pointer"
+                title="Ver pacientes organizados por categorias e tags de cores"
+              >
+                <Tag className="w-3.5 h-3.5 text-[#D0A73B]" />
+                <span>Categorias & Tags</span>
+              </button>
+
               <button
                 id="btn-card-goto-fidelidade"
                 onClick={() => {
@@ -531,8 +548,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 }}
                 className="text-xs font-bold text-purple-800 hover:text-purple-950 flex items-center space-x-1 hover:underline cursor-pointer"
               >
-                <span>Clube Fidelidade R$ 99</span>
-                <ChevronRight className="w-3.5 h-3.5" />
+                <span>Clube R$99</span>
+                <ChevronRight className="w-3 h-3" />
               </button>
             </div>
           </div>
@@ -827,12 +844,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 onClick={() => setProntuarioSubTab('pacientes')}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
                   prontuarioSubTab === 'pacientes'
-                    ? 'bg-[#31523D] text-white shadow-xs'
+                    ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                <Users className="w-3.5 h-3.5 text-[#D0A73B]" />
-                <span>Cadastro de Pacientes ({patients.length})</span>
+                <Tag className="w-3.5 h-3.5 text-[#D0A73B]" />
+                <span>Pacientes (Categorias & Tags) ({patients.length})</span>
               </button>
 
               <button
@@ -845,6 +862,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-[#D0A73B]" />
                 <span>TCLE & Contratos Assinados</span>
+              </button>
+
+              <button
+                id="tab-prontuario-templates"
+                onClick={() => setProntuarioSubTab('templates')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  prontuarioSubTab === 'templates'
+                    ? 'bg-[#B08A3E] text-white shadow-xs font-bold'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5 text-[#D0A73B]" />
+                <span>Templates da Dra. Elays</span>
               </button>
             </div>
 
@@ -868,6 +898,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {prontuarioSubTab === 'tcle' && (
               <FisiolysCRM initialTab="tcle" />
+            )}
+
+            {prontuarioSubTab === 'templates' && (
+              <FisiolysCRM initialTab="templates" />
             )}
           </div>
         )}
@@ -1216,6 +1250,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <Brain className="w-3.5 h-3.5 text-[#FDE68A]" />
                 <span>Assistente Fisiolys (IA)</span>
               </button>
+
+              <button
+                id="tab-crm-templates"
+                onClick={() => setCrmSubTab('templates')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  crmSubTab === 'templates'
+                    ? 'bg-[#B08A3E] text-white shadow-xs font-bold'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5 text-[#D0A73B]" />
+                <span>Templates & Scripts</span>
+              </button>
             </div>
 
             {/* Sub-view content */}
@@ -1233,6 +1280,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {crmSubTab === 'ia_clinica' && (
               <FisiolysCRM initialTab="ia_clinica" />
+            )}
+
+            {crmSubTab === 'templates' && (
+              <FisiolysCRM initialTab="templates" />
             )}
           </div>
         )}

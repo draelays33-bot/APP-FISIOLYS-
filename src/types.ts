@@ -116,6 +116,26 @@ export interface Testimonial {
   highlight?: boolean;
 }
 
+export type PatientCategory = 
+  | 'pilates' 
+  | 'fisioterapia' 
+  | 'pelvica' 
+  | 'fidelidade' 
+  | 'aba' 
+  | 'massoterapia' 
+  | 'pos_operatorio' 
+  | 'outros';
+
+export type PatientColorTag = 
+  | 'purple' 
+  | 'emerald' 
+  | 'rose' 
+  | 'amber' 
+  | 'blue' 
+  | 'sky' 
+  | 'orange' 
+  | 'red';
+
 export interface Patient {
   id: string;
   name: string;
@@ -131,6 +151,10 @@ export interface Patient {
   totalFaltas?: number;
   notes?: string;
   createdAt: string;
+  category?: PatientCategory | string;
+  colorTag?: PatientColorTag | string;
+  tags?: string[];
+  statusTag?: string;
 }
 
 export interface ClinicConfig {

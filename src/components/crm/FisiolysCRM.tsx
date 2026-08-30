@@ -7,7 +7,7 @@ import {
   TrendingUp, Send, RefreshCw, BarChart2, CheckSquare, ListTodo, ShieldAlert,
   FolderKanban, ArrowLeft, ChevronDown, Award, Sparkle, Bot, CheckCircle,
   Smartphone, PenTool, ExternalLink, FileCheck2, UserPlus, Cake, Heart, BookOpen,
-  Camera, Mic, Volume2, Lock, ScrollText, Copy, Paperclip, Upload, FileUp, Image as ImageIcon, FileCheck
+  Camera, Mic, Volume2, Lock, ScrollText, Copy, Paperclip, Upload, FileUp, Image as ImageIcon, FileCheck, ClipboardList
 } from 'lucide-react';
 import {
   ResponsiveContainer, ComposedChart, BarChart, Bar, AreaChart, Area,
@@ -26,6 +26,7 @@ import { CrmContactSyncModal } from './CrmContactSyncModal';
 import { CrmComplianceDashboard } from './CrmComplianceDashboard';
 import { CrmDailyWisdomModal } from './CrmDailyWisdomModal';
 import { DigitalSignaturePad } from './DigitalSignaturePad';
+import { CrmTemplatesLibrary } from './CrmTemplatesLibrary';
 import { AdminWebhook } from '../admin/AdminWebhook';
 import { exportLeadsToCsv } from '../../utils/csvExport';
 import { 
@@ -188,6 +189,7 @@ export const FisiolysCRM: React.FC<FisiolysCRMProps> = ({
   const [showContactSyncModal, setShowContactSyncModal] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [signingAval, setSigningAval] = useState<CrmAvaliacao | null>(null);
+  const [agendaSearchQuery, setAgendaSearchQuery] = useState('');
 
   // AI Generation Loading State
   const [aiGeneratingReasoning, setAiGeneratingReasoning] = useState(false);
@@ -1117,16 +1119,17 @@ export const FisiolysCRM: React.FC<FisiolysCRMProps> = ({
   // Active Tab Title Translation
   const getTabTitle = () => {
     switch (activeTab) {
+      case 'avaliacoes': return 'Fichas de Avaliação Clínica & Anamnese';
+      case 'evolucoes': return 'Prontuário de Evoluções & Frequência';
+      case 'tcle': return 'Auditoria, TCLE & Contratos Digitais';
+      case 'templates': return 'Central de Templates & Scripts da Dra. Elays';
       case 'leads': return 'Funil de Leads & Pacientes em Acompanhamento';
       case 'mensagens': return 'Disparos WhatsApp & Lembretes com 1 Clique';
       case 'automacoes': return 'Automações de Disparos em Lote & Webhooks';
       case 'ia_clinica': return 'Assistente Fisiolys com IA Clínica';
-      case 'agendamentos': return 'Agenda & Horários Clínicos';
+      case 'analytics': return 'Painel de Desempenho & Métricas Clínicas';
       case 'tarefas': return 'Lembretes & Tarefas Clínicas';
-      case 'avaliacoes': return 'Fichas de Avaliação Fisioterapêutica';
-      case 'evolucoes': return 'Prontuário & Evoluções Clínicas';
-      case 'tcle': return 'Auditoria, TCLE & Contratos Digitais';
-      default: return 'CRM & Comunicação • Dra. Elays Marinho';
+      default: return 'CRM & Gestão Clínica • Dra. Elays Marinho';
     }
   };
 
@@ -1134,12 +1137,12 @@ export const FisiolysCRM: React.FC<FisiolysCRMProps> = ({
     <div className="min-h-screen bg-[#FAF7F0] text-[#26241F] font-sans antialiased flex flex-col lg:flex-row shadow-2xl rounded-3xl overflow-hidden border border-[#E4DCC8] my-2">
       
       {/* ========================================================================= */}
-      {/* LEFT SIDEBAR NAVIGATION (Matching IMG_0207.png) */}
+      {/* LEFT SIDEBAR NAVIGATION */}
       {/* ========================================================================= */}
       <aside className="w-full lg:w-72 bg-[#1B2E24] text-[#FAF7F0] shrink-0 flex flex-col justify-between border-r border-[#16251D] p-4 lg:p-5 select-none">
         
         {/* Brand Top Header */}
-        <div className="space-y-6">
+        <div className="space-y-5">
           <div className="flex items-center space-x-3 px-2 py-1">
             <div className="w-10 h-10 rounded-full bg-[#FAF7F0] p-1 flex items-center justify-center border-2 border-[#DCC58F] shadow-md overflow-hidden shrink-0">
               <img 
@@ -1154,89 +1157,218 @@ export const FisiolysCRM: React.FC<FisiolysCRMProps> = ({
                 <span>Fisiolys</span>
               </h2>
               <span className="block text-[9px] uppercase tracking-wider text-[#DCC58F] font-bold">
-                DRA. ELAYS MARINHO · FISIOTERAPIA & PILATES
+                DRA. ELAYS MARINHO · CRM & CLÍNICA
               </span>
             </div>
           </div>
 
-          {/* Navigation Menu List (4 Módulos do CRM) */}
-          <nav className="space-y-1.5">
+          {/* Navigation Menu List Organizado por Seções */}
+          <nav className="space-y-4">
             
-            {/* 1. Funil de Leads & Pacientes em Acompanhamento */}
-            <button
-              id="crm-tab-leads"
-              onClick={() => setActiveTab('leads')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === 'leads'
-                  ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
-                  : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
-              }`}
-            >
-              <div className="flex items-center space-x-3">
-                <Users className={`w-4 h-4 ${activeTab === 'leads' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
-                <span className="truncate">Funil de Leads & Pacientes</span>
-              </div>
-              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-[#16251D] text-[#DCC58F] border border-[#DCC58F]/20">
-                {leads.length || 6}
+            {/* SEÇÃO 1: CLÍNICA & PRONTUÁRIO */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#DCC58F] px-2 block">
+                📋 Prontuário & Templates
               </span>
-            </button>
 
-            {/* 2. Disparo de Confirmação e Lembretes por WhatsApp com 1 Clique */}
-            <button
-              id="crm-tab-mensagens"
-              onClick={() => setActiveTab('mensagens')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === 'mensagens'
-                  ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
-                  : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
-              }`}
-            >
-              <div className="flex items-center space-x-3">
-                <Send className={`w-4 h-4 ${activeTab === 'mensagens' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
-                <span className="truncate">Disparos WhatsApp 1-Clique</span>
-              </div>
-              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-[#16251D] text-[#DCC58F] border border-[#DCC58F]/20">
-                Lembretes
-              </span>
-            </button>
+              {/* Fichas de Avaliação */}
+              <button
+                id="crm-tab-avaliacoes"
+                onClick={() => setActiveTab('avaliacoes')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'avaliacoes'
+                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40 ring-1 ring-[#DCC58F]/30'
+                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <FileText className={`w-4 h-4 ${activeTab === 'avaliacoes' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                  <span className="truncate">Fichas de Avaliação</span>
+                </div>
+                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#16251D] text-[#DCC58F]">
+                  {avaliacoes.length}
+                </span>
+              </button>
 
-            {/* 3. Automações de Disparos em Lote & Integração via Webhooks */}
-            <button
-              id="crm-tab-automacoes"
-              onClick={() => setActiveTab('automacoes')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === 'automacoes'
-                  ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
-                  : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
-              }`}
-            >
-              <div className="flex items-center space-x-3">
-                <Zap className={`w-4 h-4 ${activeTab === 'automacoes' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
-                <span className="truncate">Automações & Webhooks</span>
-              </div>
-              <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-[#16251D] text-emerald-300 border border-emerald-500/30">
-                API
-              </span>
-            </button>
+              {/* Evoluções & Frequência */}
+              <button
+                id="crm-tab-evolucoes"
+                onClick={() => setActiveTab('evolucoes')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'evolucoes'
+                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40 ring-1 ring-[#DCC58F]/30'
+                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <TrendingUp className={`w-4 h-4 ${activeTab === 'evolucoes' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                  <span className="truncate">Evoluções & Sessões</span>
+                </div>
+              </button>
 
-            {/* 4. Assistente Fisiolys com IA Clínica para suporte terapêutico */}
-            <button
-              id="crm-tab-ia-clinica"
-              onClick={() => setActiveTab('ia_clinica')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === 'ia_clinica'
-                  ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
-                  : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
-              }`}
-            >
-              <div className="flex items-center space-x-3">
-                <Bot className={`w-4 h-4 ${activeTab === 'ia_clinica' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
-                <span className="truncate">Assistente IA Clínica</span>
-              </div>
-              <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-linear-to-r from-amber-500 to-amber-600 text-white shadow-xs">
-                IA PRO
+              {/* TCLE & Contratos */}
+              <button
+                id="crm-tab-tcle"
+                onClick={() => setActiveTab('tcle')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'tcle'
+                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40 ring-1 ring-[#DCC58F]/30'
+                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <ShieldCheck className={`w-4 h-4 ${activeTab === 'tcle' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                  <span className="truncate">TCLE & Contratos</span>
+                </div>
+                <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-[#16251D] text-emerald-300">
+                  COFFITO
+                </span>
+              </button>
+
+              {/* Templates da Dra. Elays */}
+              <button
+                id="crm-tab-templates"
+                onClick={() => setActiveTab('templates')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'templates'
+                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40 ring-1 ring-[#DCC58F]/30'
+                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <BookOpen className={`w-4 h-4 ${activeTab === 'templates' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                  <span className="truncate font-bold">Templates da Dra. Elays</span>
+                </div>
+                <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-linear-to-r from-[#DCC58F] to-[#B08A3E] text-[#1B2E24]">
+                  Novo
+                </span>
+              </button>
+            </div>
+
+            {/* SEÇÃO 2: COMUNICAÇÃO & ATENDIMENTO */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#DCC58F] px-2 block">
+                💬 Comunicação & Funil
               </span>
-            </button>
+
+              {/* Funil de Leads & Pacientes */}
+              <button
+                id="crm-tab-leads"
+                onClick={() => setActiveTab('leads')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'leads'
+                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
+                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <Users className={`w-4 h-4 ${activeTab === 'leads' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                  <span className="truncate">Funil de Leads & Pacientes</span>
+                </div>
+                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#16251D] text-[#DCC58F]">
+                  {leads.length || 6}
+                </span>
+              </button>
+
+              {/* Disparos WhatsApp */}
+              <button
+                id="crm-tab-mensagens"
+                onClick={() => setActiveTab('mensagens')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'mensagens'
+                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
+                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <Send className={`w-4 h-4 ${activeTab === 'mensagens' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                  <span className="truncate">Disparos WhatsApp 1-Clique</span>
+                </div>
+                <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-[#16251D] text-[#DCC58F]">
+                  1-Clique
+                </span>
+              </button>
+
+              {/* Automações & Webhooks */}
+              <button
+                id="crm-tab-automacoes"
+                onClick={() => setActiveTab('automacoes')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'automacoes'
+                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
+                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <Zap className={`w-4 h-4 ${activeTab === 'automacoes' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                  <span className="truncate">Automações & Webhooks</span>
+                </div>
+                <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-[#16251D] text-emerald-300">
+                  API
+                </span>
+              </button>
+            </div>
+
+            {/* SEÇÃO 3: INTELIGÊNCIA & GESTÃO */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#DCC58F] px-2 block">
+                🧠 Inteligência & Gestão
+              </span>
+
+              {/* Assistente IA Clínica */}
+              <button
+                id="crm-tab-ia-clinica"
+                onClick={() => setActiveTab('ia_clinica')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'ia_clinica'
+                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
+                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <Bot className={`w-4 h-4 ${activeTab === 'ia_clinica' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                  <span className="truncate">Assistente IA Clínica</span>
+                </div>
+                <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-linear-to-r from-amber-500 to-amber-600 text-white">
+                  IA PRO
+                </span>
+              </button>
+
+              {/* Desempenho & Analytics */}
+              <button
+                id="crm-tab-analytics"
+                onClick={() => setActiveTab('analytics')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'analytics'
+                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
+                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <Activity className={`w-4 h-4 ${activeTab === 'analytics' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                  <span className="truncate">Desempenho & Métricas</span>
+                </div>
+              </button>
+
+              {/* Lembretes & Tarefas */}
+              <button
+                id="crm-tab-tarefas"
+                onClick={() => setActiveTab('tarefas')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'tarefas'
+                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
+                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <CheckSquare className={`w-4 h-4 ${activeTab === 'tarefas' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                  <span className="truncate">Lembretes & Tarefas</span>
+                </div>
+                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#16251D] text-[#DCC58F]">
+                  {tasks.filter(t => !t.concluida).length}
+                </span>
+              </button>
+            </div>
 
           </nav>
         </div>
@@ -1336,9 +1468,12 @@ export const FisiolysCRM: React.FC<FisiolysCRMProps> = ({
         <div className="p-4 sm:p-6 lg:p-8 space-y-6">
           
           {/* ========================================================================= */}
-          {/* HERO WELCOME CARD (Green banner matching IMG_0207.png) */}
+          {/* HERO & METRICS (Shown for Leads and Analytics tabs) */}
           {/* ========================================================================= */}
-          <section className="bg-linear-to-r from-[#1B2E24] via-[#223B2E] to-[#1B2E24] rounded-3xl p-6 text-[#FAF7F0] relative overflow-hidden border border-[#2F4D3C] shadow-lg">
+          {(activeTab === 'leads' || activeTab === 'analytics') && (
+            <>
+              {/* HERO WELCOME CARD (Green banner matching IMG_0207.png) */}
+              <section className="bg-linear-to-r from-[#1B2E24] via-[#223B2E] to-[#1B2E24] rounded-3xl p-6 text-[#FAF7F0] relative overflow-hidden border border-[#2F4D3C] shadow-lg">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-6 relative z-10">
               <div className="space-y-2.5 max-w-xl">
                 <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-[#294637] text-[#DCC58F] text-[11px] font-bold border border-[#3E6550] shadow-2xs">
@@ -1590,6 +1725,8 @@ export const FisiolysCRM: React.FC<FisiolysCRMProps> = ({
               </ResponsiveContainer>
             </div>
           </section>
+          </>
+          )}
 
           {/* ========================================================================= */}
           {/* TAB 1: LEADS & PACIENTES */}
@@ -2516,6 +2653,54 @@ export const FisiolysCRM: React.FC<FisiolysCRMProps> = ({
 
                 <div className="h-[600px] rounded-2xl overflow-hidden border border-[#E4DCC8]">
                   <GeminiChatbot className="h-full" />
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 9: CENTRAL DE TEMPLATES DA DRA. ELAYS */}
+          {/* ========================================================================= */}
+          {activeTab === 'templates' && (
+            <section className="space-y-4 animate-in fade-in duration-200">
+              <CrmTemplatesLibrary clinicConfig={clinicConfig} />
+            </section>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 10: ANALYTICS & MÉTRICAS DEDICADAS */}
+          {/* ========================================================================= */}
+          {activeTab === 'analytics' && (
+            <section className="space-y-6 animate-in fade-in duration-200">
+              <div className="bg-[#FAF7F0] p-6 rounded-3xl border border-[#E4DCC8] shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-2xl bg-[#1B2E24] text-[#DCC58F] flex items-center justify-center">
+                      <Activity className="w-5 h-5 text-[#DCC58F]" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-serif font-bold text-[#1B2E24]">Desempenho & Métricas Clínicas da Dra. Elays</h3>
+                      <p className="text-xs text-[#736B5E]">Estatísticas detalhadas de retenção, novos agendamentos e adesão ao tratamento.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                  <div className="p-4 bg-[#F3EEE2] rounded-2xl border border-[#E4DCC8]">
+                    <span className="text-xs font-bold text-[#736B5E] block uppercase">Taxa de Conversão</span>
+                    <span className="text-2xl font-bold font-mono text-[#1B2E24]">33.3%</span>
+                    <span className="text-[11px] text-emerald-700 block mt-1">Leads para Pacientes Ativos</span>
+                  </div>
+                  <div className="p-4 bg-[#F3EEE2] rounded-2xl border border-[#E4DCC8]">
+                    <span className="text-xs font-bold text-[#736B5E] block uppercase">Fichas de Avaliação</span>
+                    <span className="text-2xl font-bold font-mono text-[#1B2E24]">{avaliacoes.length}</span>
+                    <span className="text-[11px] text-purple-700 block mt-1">Com TCLE e contrato COFFITO</span>
+                  </div>
+                  <div className="p-4 bg-[#F3EEE2] rounded-2xl border border-[#E4DCC8]">
+                    <span className="text-xs font-bold text-[#736B5E] block uppercase">Evoluções Registradas</span>
+                    <span className="text-2xl font-bold font-mono text-[#1B2E24]">6</span>
+                    <span className="text-[11px] text-emerald-700 block mt-1">Sessões acompanhadas</span>
+                  </div>
                 </div>
               </div>
             </section>
@@ -3850,6 +4035,225 @@ export const FisiolysCRM: React.FC<FisiolysCRMProps> = ({
                 className="px-5 py-2 bg-[#1B2E24] text-[#FAF7F0] text-xs font-bold rounded-full cursor-pointer"
               >
                 Fechar Visualização
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: BUSCA RÁPIDA DE PACIENTES DA CLÍNICA & AGENDAS */}
+      {/* ========================================================================= */}
+      {showAgendaSearchModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#FAF7F0] rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-[#E4DCC8] space-y-4 max-h-[85vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-[#E4DCC8] pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-[#1B2E24] text-[#DCC58F] flex items-center justify-center font-bold">
+                  <Search className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-serif font-bold text-[#1B2E24]">
+                    Busca Geral de Pacientes & Agendamentos
+                  </h3>
+                  <p className="text-xs text-[#736B5E]">
+                    Encontre pacientes cadastrados, histórico de consultas e envie mensagens instantâneas.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAgendaSearchModal(false);
+                  setAgendaSearchQuery('');
+                }}
+                className="p-1.5 rounded-full text-[#736B5E] hover:text-[#1B2E24] bg-[#F3EEE2] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Campo de Busca em Tempo Real */}
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3.5 top-3 text-[#B08A3E]" />
+              <input
+                type="text"
+                autoFocus
+                placeholder="Digite o nome do paciente, telefone ou CPF..."
+                value={agendaSearchQuery}
+                onChange={(e) => setAgendaSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-9 py-2.5 text-xs bg-white border border-[#E4DCC8] rounded-xl font-medium text-[#1B2E24] focus:ring-2 focus:ring-[#1B2E24] shadow-2xs"
+              />
+              {agendaSearchQuery && (
+                <button
+                  onClick={() => setAgendaSearchQuery('')}
+                  className="absolute right-2.5 top-2.5 p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Lista de Resultados */}
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {(() => {
+                const query = agendaSearchQuery.trim().toLowerCase();
+                const cleanQuery = query.replace(/\D/g, '');
+
+                // Agrega pacientes da lista geral + leads
+                const results: {
+                  id: string;
+                  nome: string;
+                  telefone: string;
+                  origem: string;
+                  cpf?: string;
+                  categoria?: string;
+                  tipo: 'paciente' | 'lead' | 'agendamento';
+                  detalhes?: string;
+                }[] = [];
+
+                // 1. Pacientes cadastrados
+                clinicPatients.forEach(p => {
+                  const matchName = p.name.toLowerCase().includes(query);
+                  const matchPhone = p.phone.includes(query) || (cleanQuery && p.phone.replace(/\D/g, '').includes(cleanQuery));
+                  const matchCpf = p.cpf ? p.cpf.toLowerCase().includes(query) : false;
+                  if (!query || matchName || matchPhone || matchCpf) {
+                    results.push({
+                      id: p.id,
+                      nome: p.name,
+                      telefone: p.phone,
+                      origem: 'Prontuário da Clínica',
+                      cpf: p.cpf,
+                      categoria: p.category || 'Fisioterapia / Pilates',
+                      tipo: 'paciente',
+                      detalhes: p.notes || `Última sessão: ${p.lastSessionDate || 'Recente'}`
+                    });
+                  }
+                });
+
+                // 2. Leads do Funil
+                leads.forEach(l => {
+                  const matchName = l.nome.toLowerCase().includes(query);
+                  const matchPhone = l.telefone.includes(query) || (cleanQuery && l.telefone.replace(/\D/g, '').includes(cleanQuery));
+                  if (!query || matchName || matchPhone) {
+                    if (!results.some(r => r.nome.toLowerCase() === l.nome.toLowerCase())) {
+                      results.push({
+                        id: l.id,
+                        nome: l.nome,
+                        telefone: l.telefone,
+                        origem: 'Funil CRM & WhatsApp',
+                        categoria: l.protocolo,
+                        tipo: 'lead',
+                        detalhes: `Status: ${l.status.toUpperCase()} • Prioridade: ${l.prioridade}`
+                      });
+                    }
+                  }
+                });
+
+                if (results.length === 0) {
+                  return (
+                    <div className="text-center py-8 bg-white rounded-2xl border border-[#E4DCC8] space-y-2">
+                      <Search className="w-8 h-8 text-amber-600 mx-auto opacity-70" />
+                      <p className="text-xs font-bold text-[#1B2E24]">Nenhum paciente encontrado para "{agendaSearchQuery}"</p>
+                      <p className="text-[11px] text-[#736B5E]">Verifique a grafia ou cadastre um novo paciente/lead.</p>
+                      <button
+                        onClick={() => {
+                          setShowAgendaSearchModal(false);
+                          handleOpenLeadModal();
+                        }}
+                        className="px-3.5 py-1.5 bg-[#1B2E24] text-[#FAF7F0] rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+                      >
+                        + Cadastrar Novo Paciente / Lead
+                      </button>
+                    </div>
+                  );
+                }
+
+                return results.map(item => (
+                  <div
+                    key={`${item.tipo}-${item.id}`}
+                    className="p-3.5 bg-white rounded-2xl border border-[#E4DCC8] hover:border-[#B08A3E] shadow-2xs hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs font-bold text-[#1B2E24]">{item.nome}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          item.tipo === 'paciente' ? 'bg-emerald-100 text-emerald-800' : 'bg-purple-100 text-purple-800'
+                        }`}>
+                          {item.origem}
+                        </span>
+                        {item.categoria && (
+                          <span className="text-[10px] font-medium text-[#736B5E] bg-[#F3EEE2] px-2 py-0.5 rounded-md">
+                            {item.categoria}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-3 text-xs text-[#736B5E]">
+                        <span className="flex items-center space-x-1">
+                          <Phone className="w-3 h-3 text-[#B08A3E]" />
+                          <span>{item.telefone}</span>
+                        </span>
+                        {item.cpf && (
+                          <span>CPF: {item.cpf}</span>
+                        )}
+                      </div>
+                      {item.detalhes && (
+                        <p className="text-[11px] text-[#5B5A52] italic">{item.detalhes}</p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center space-x-1.5 shrink-0">
+                      {/* WhatsApp Direto */}
+                      <button
+                        onClick={() => {
+                          const cleanTel = item.telefone.replace(/\D/g, '');
+                          const url = `https://wa.me/55${cleanTel}?text=${encodeURIComponent(`Olá, ${item.nome}! Aqui é da Clínica Fisiolys da Dra. Elays Marinho. Como você está se sentindo hoje?`)}`;
+                          window.open(url, '_blank');
+                        }}
+                        className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center space-x-1 shadow-2xs cursor-pointer"
+                        title="Conversar via WhatsApp"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>WhatsApp</span>
+                      </button>
+
+                      {/* Abrir Ficha de Avaliação */}
+                      <button
+                        onClick={() => {
+                          setShowAgendaSearchModal(false);
+                          handleOpenAvalModal({
+                            id: `aval-${Date.now()}`,
+                            leadId: item.tipo === 'lead' ? item.id : '',
+                            leadNomeAvulso: item.nome,
+                            telefone: item.telefone,
+                            cpf: item.cpf || '',
+                            data: new Date().toISOString().split('T')[0],
+                            avaliador: 'Dra. Elays Marinho (CREFITO 208058)',
+                            queixaPrincipal: '',
+                            escalaDor: 5,
+                            planoTerapeutico: `Plano Fisiolys para ${item.nome}`,
+                            termoImagemVozAceito: true
+                          } as any);
+                        }}
+                        className="px-2.5 py-1.5 bg-[#1B2E24] hover:bg-[#243F30] text-[#FAF7F0] rounded-xl text-xs font-bold flex items-center space-x-1 shadow-2xs cursor-pointer"
+                        title="Criar Ficha de Avaliação Clínica"
+                      >
+                        <ClipboardList className="w-3.5 h-3.5 text-[#DCC58F]" />
+                        <span>Ficha Clínica</span>
+                      </button>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            <div className="pt-2 border-t border-[#E4DCC8] flex items-center justify-between text-xs text-[#736B5E]">
+              <span>Total de pacientes indexados: <strong>{clinicPatients.length + leads.length}</strong></span>
+              <button
+                type="button"
+                onClick={() => setShowAgendaSearchModal(false)}
+                className="px-4 py-1.5 bg-[#F3EEE2] hover:bg-[#ECE4D3] text-[#1B2E24] font-bold rounded-xl cursor-pointer"
+              >
+                Fechar
               </button>
             </div>
           </div>
