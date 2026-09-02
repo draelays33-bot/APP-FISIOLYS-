@@ -437,43 +437,112 @@ app.post('/api/appointments', async (req, res) => {
     return res.status(400).json({ error: "Este horário já atingiu o limite de 4 pacientes (4/4 vagas preenchidas). Por favor, escolha outro horário disponível ou fale conosco no WhatsApp." });
   }
 
-  const newAppt: Appointment = {
-    id: `app-${Date.now()}`,
-    patientName: patientName.trim(),
-    patientPhone: patientPhone.trim(),
-    patientEmail: patientEmail ? patientEmail.trim() : undefined,
-    patientBirthDate: patientBirthDate || undefined,
-    patientAddress: patientAddress ? patientAddress.trim() : undefined,
-    patientCity: patientCity ? patientCity.trim() : undefined,
-    patientCpf: patientCpf ? patientCpf.trim() : undefined,
-    serviceId: service.id,
-    serviceName: service.name,
-    servicePrice: service.price,
-    durationMinutes: service.durationMinutes,
-    date,
-    time,
-    frequencyType: frequencyType || 'sessao_unica',
-    selectedDaysSchedule: selectedDaysSchedule || undefined,
-    planScheduleSummary: planScheduleSummary || undefined,
-    multipleDates: multipleDates || undefined,
-    status: 'agendado',
-    paymentMethod: paymentMethod || 'pix',
-    notes: notes ? notes.trim() : (planScheduleSummary ? `Plano/Frequência: ${planScheduleSummary}` : undefined),
-    createdAt: new Date().toISOString(),
-    webhookSent: false
-  };
+  // Calculate recurring session dates if weekly plan or multi-dates
+  const sessionDates: { date: string; time: string }[] = [];
+  if (multipleDates && multipleDates.length > 0) {
+    for (const m of multipleDates) {
+      if (m.date && m.time && !sessionDates.some(s => s.date === m.date && s.time === m.time)) {
+        sessionDates.push({ date: m.date, time: m.time });
+      }
+    }
+  } else {
+    sessionDates.push({ date, time });
+    if ((frequencyType === '2x_semana' || frequencyType === '3x_semana') && selectedDaysSchedule && selectedDaysSchedule.length > 0) {
+      const [y, m, d] = date.split('-').map(Number);
+      const targetDays = selectedDaysSchedule.map((s: any) => ({
+        dayOfWeek: Number(s.dayOfWeek),
+        time: s.time || time
+      }));
 
-  db.appointments.push(newAppt);
+      for (let dayOffset = 1; dayOffset < 28; dayOffset++) {
+        const nextDate = new Date(y, m - 1, d + dayOffset);
+        const dow = nextDate.getDay();
+        const match = targetDays.find((t: any) => t.dayOfWeek === dow);
+        if (match) {
+          const ny = nextDate.getFullYear();
+          const nm = String(nextDate.getMonth() + 1).padStart(2, '0');
+          const nd = String(nextDate.getDate()).padStart(2, '0');
+          const isoDate = `${ny}-${nm}-${nd}`;
+          if (!sessionDates.some(s => s.date === isoDate && s.time === match.time)) {
+            sessionDates.push({ date: isoDate, time: match.time });
+          }
+        }
+      }
+    }
+  }
 
-  // Update or Create Patient record with full registration data
-  let patient = db.patients.find(p => p.phone === newAppt.patientPhone || p.name.toLowerCase() === newAppt.patientName.toLowerCase());
+  const planSummaryText = planScheduleSummary ||
+    (frequencyType === '2x_semana' ? 'Plano 2x por semana (4 semanas)' :
+     frequencyType === '3x_semana' ? 'Plano 3x por semana (4 semanas)' :
+     frequencyType === 'multiplos_dias' ? `${sessionDates.length} sessões agendadas` :
+     'Sessão Individual');
+
+  const createdAppointments: Appointment[] = [];
+  const baseTimestamp = Date.now();
+
+  sessionDates.forEach((slot, index) => {
+    const appt: Appointment = {
+      id: `app-${baseTimestamp}-${index}`,
+      patientName: patientName.trim(),
+      patientPhone: patientPhone.trim(),
+      patientEmail: patientEmail ? patientEmail.trim() : undefined,
+      patientBirthDate: patientBirthDate || undefined,
+      patientAddress: patientAddress ? patientAddress.trim() : undefined,
+      patientCity: patientCity ? patientCity.trim() : 'Altamira - PA',
+      patientCpf: patientCpf ? patientCpf.trim() : undefined,
+      serviceId: service.id,
+      serviceName: service.name,
+      servicePrice: service.price,
+      durationMinutes: service.durationMinutes,
+      date: slot.date,
+      time: slot.time,
+      frequencyType: frequencyType || 'sessao_unica',
+      selectedDaysSchedule: selectedDaysSchedule || undefined,
+      planScheduleSummary: planSummaryText,
+      multipleDates: multipleDates || undefined,
+      status: 'agendado',
+      paymentMethod: paymentMethod || 'pix',
+      notes: notes ? notes.trim() : (sessionDates.length > 1 ? `Plano: ${planSummaryText} (${index + 1}/${sessionDates.length})` : undefined),
+      createdAt: new Date().toISOString(),
+      webhookSent: false
+    };
+
+    createdAppointments.push(appt);
+    db.appointments.push(appt);
+  });
+
+  const newAppt = createdAppointments[0];
+
+  // Update or Create Patient record with full registration data and chosen treatment
+  const cleanPhone = patientPhone.replace(/\D/g, '');
+  const cleanName = patientName.trim().toLowerCase();
+  let patient = db.patients.find(p => {
+    const pClean = p.phone.replace(/\D/g, '');
+    return (cleanPhone.length >= 6 && pClean.includes(cleanPhone)) || p.name.toLowerCase() === cleanName;
+  });
+
+  const allDates = sessionDates.map(s => s.date).sort();
+  const firstDate = allDates[0] || date;
+  const lastDate = allDates[allDates.length - 1] || date;
+
   if (patient) {
-    patient.totalSessions += 1;
-    patient.lastSessionDate = date;
+    patient.totalSessions = (patient.totalSessions || 0) + sessionDates.length;
+    patient.lastSessionDate = lastDate;
+    if (!patient.firstSessionDate) patient.firstSessionDate = firstDate;
+    
+    // Set chosen treatment
+    patient.currentTreatment = service.name;
+    patient.currentServiceId = service.id;
+    patient.treatmentPlan = planSummaryText;
+    patient.sessionPrice = service.price;
+    if (service.category) patient.category = service.category;
+
     if (patientEmail && !patient.email) patient.email = patientEmail.trim();
     if (patientBirthDate && !patient.birthDate) patient.birthDate = patientBirthDate;
     if (patientAddress && !patient.address) patient.address = patientAddress.trim();
     if (patientCity && !patient.city) patient.city = patientCity.trim();
+    if (patientCpf && !patient.cpf) patient.cpf = patientCpf.trim();
+    if (notes && !patient.notes) patient.notes = notes.trim();
   } else {
     patient = {
       id: `pat-${Date.now()}`,
@@ -483,9 +552,16 @@ app.post('/api/appointments', async (req, res) => {
       birthDate: patientBirthDate || undefined,
       address: patientAddress ? patientAddress.trim() : undefined,
       city: patientCity ? patientCity.trim() : 'Altamira - PA',
-      firstSessionDate: date,
-      lastSessionDate: date,
-      totalSessions: 1,
+      cpf: patientCpf ? patientCpf.trim() : undefined,
+      firstSessionDate: firstDate,
+      lastSessionDate: lastDate,
+      totalSessions: sessionDates.length,
+      currentTreatment: service.name,
+      currentServiceId: service.id,
+      treatmentPlan: planSummaryText,
+      sessionPrice: service.price,
+      category: service.category || 'fisioterapia',
+      notes: notes ? notes.trim() : undefined,
       createdAt: new Date().toISOString()
     };
     db.patients.push(patient);

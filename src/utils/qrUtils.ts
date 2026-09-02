@@ -133,3 +133,39 @@ Aguardo a confirmação do agendamento. Muito obrigado(a)! 🌿💚`;
   return encodeURIComponent(text);
 }
 
+/**
+ * Calculates patient age from birthDate string (YYYY-MM-DD)
+ */
+export function calculateAge(birthDateStr?: string): number | null {
+  if (!birthDateStr) return null;
+  const parts = birthDateStr.split('-');
+  if (parts.length !== 3) return null;
+  const birthYear = parseInt(parts[0], 10);
+  const birthMonth = parseInt(parts[1], 10) - 1;
+  const birthDay = parseInt(parts[2], 10);
+
+  const birthDate = new Date(birthYear, birthMonth, birthDay);
+  if (isNaN(birthDate.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age : null;
+}
+
+/**
+ * Formats birth date with computed age in Portuguese (e.g. "15/04/1992 (34 anos)")
+ */
+export function formatBirthDateAndAge(birthDateStr?: string): string {
+  if (!birthDateStr) return '';
+  const formattedDate = formatDatePtBR(birthDateStr);
+  const age = calculateAge(birthDateStr);
+  if (age !== null) {
+    return `${formattedDate} (${age} ${age === 1 ? 'ano' : 'anos'})`;
+  }
+  return formattedDate;
+}
+

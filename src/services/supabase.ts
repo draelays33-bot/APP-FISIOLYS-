@@ -59,7 +59,7 @@ export function getSupabaseMigrationSQL(): string {
 -- Inclui suporte a Categorias de Pacientes, Tags de Cores e Reagendamento
 -- =========================================================================
 
--- 1. TABELA DE PACIENTES COM CATEGORIAS E TAGS DE CORES
+-- 1. TABELA DE PACIENTES COM CATEGORIAS, TAGS E TRANCAMENTO DE SESSÕES
 CREATE TABLE IF NOT EXISTS public.patients (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -67,12 +67,25 @@ CREATE TABLE IF NOT EXISTS public.patients (
     email TEXT,
     cpf TEXT,
     birth_date DATE,
+    rg TEXT,
+    gender TEXT,
+    profession TEXT,
+    emergency_contact TEXT,
+    emergency_phone TEXT,
+    guardian_name TEXT,
+    health_insurance TEXT,
     address TEXT,
     city TEXT DEFAULT 'Altamira - PA',
     category TEXT DEFAULT 'fisioterapia',      -- 'pilates', 'fisioterapia', 'pelvica', 'fidelidade', 'aba', 'massoterapia', 'pos_operatorio', 'outros'
     color_tag TEXT DEFAULT 'emerald',          -- 'purple', 'emerald', 'rose', 'amber', 'blue', 'sky', 'orange', 'red'
     tags TEXT[] DEFAULT '{}',                  -- Array de tags personalizadas (ex: ['Postura', 'Gestante', 'VIP'])
     status_tag TEXT DEFAULT 'Ativo',
+    is_locked BOOLEAN DEFAULT false,           -- Trancamento / Congelamento de sessões
+    lock_start_date DATE,                      -- Data de início do trancamento
+    lock_end_date DATE,                        -- Data prevista de retorno
+    lock_reason TEXT,                          -- Motivo do trancamento
+    lock_notes TEXT,                           -- Observações do trancamento
+    locked_at TIMESTAMP WITH TIME ZONE,
     first_session_date DATE,
     last_session_date DATE,
     total_sessions INTEGER DEFAULT 0,
@@ -178,12 +191,25 @@ export async function syncPatientsToSupabase(patients: Patient[]): Promise<{ suc
       email: p.email || null,
       cpf: p.cpf || null,
       birth_date: p.birthDate || null,
+      rg: p.rg || null,
+      gender: p.gender || null,
+      profession: p.profession || null,
+      emergency_contact: p.emergencyContact || null,
+      emergency_phone: p.emergencyPhone || null,
+      guardian_name: p.guardianName || null,
+      health_insurance: p.healthInsurance || null,
       address: p.address || null,
       city: p.city || 'Altamira - PA',
       category: p.category || 'fisioterapia',
       color_tag: p.colorTag || 'emerald',
       tags: p.tags || [],
       status_tag: p.statusTag || 'Ativo',
+      is_locked: Boolean(p.isLocked),
+      lock_start_date: p.lockStartDate || null,
+      lock_end_date: p.lockEndDate || null,
+      lock_reason: p.lockReason || null,
+      lock_notes: p.lockNotes || null,
+      locked_at: p.lockedAt || null,
       first_session_date: p.firstSessionDate || null,
       last_session_date: p.lastSessionDate || null,
       total_sessions: p.totalSessions || 0,
@@ -219,12 +245,25 @@ export async function syncPatientToSupabase(patient: Patient): Promise<boolean> 
       email: patient.email || null,
       cpf: patient.cpf || null,
       birth_date: patient.birthDate || null,
+      rg: patient.rg || null,
+      gender: patient.gender || null,
+      profession: patient.profession || null,
+      emergency_contact: patient.emergencyContact || null,
+      emergency_phone: patient.emergencyPhone || null,
+      guardian_name: patient.guardianName || null,
+      health_insurance: patient.healthInsurance || null,
       address: patient.address || null,
       city: patient.city || 'Altamira - PA',
       category: patient.category || 'fisioterapia',
       color_tag: patient.colorTag || 'emerald',
       tags: patient.tags || [],
       status_tag: patient.statusTag || 'Ativo',
+      is_locked: Boolean(patient.isLocked),
+      lock_start_date: patient.lockStartDate || null,
+      lock_end_date: patient.lockEndDate || null,
+      lock_reason: patient.lockReason || null,
+      lock_notes: patient.lockNotes || null,
+      locked_at: patient.lockedAt || null,
       first_session_date: patient.firstSessionDate || null,
       last_session_date: patient.lastSessionDate || null,
       total_sessions: patient.totalSessions || 0,

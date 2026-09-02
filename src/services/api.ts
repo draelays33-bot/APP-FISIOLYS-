@@ -99,6 +99,15 @@ export const api = {
 
   // Appointments
   async getAppointments(date?: string, status?: string): Promise<Appointment[]> {
+    // Generate recurrent appointments before fetching
+    if (typeof window !== 'undefined') {
+      try {
+        localDb.generateRecurrentAppointments();
+      } catch (e) {
+        console.error('Failed to generate recurrent appointments', e);
+      }
+    }
+
     let url = '/api/appointments';
     const params = new URLSearchParams();
     if (date) params.append('date', date);
@@ -247,7 +256,7 @@ export const api = {
   },
 
   async updatePatient(id: string, data: Partial<Patient>): Promise<Patient> {
-    return fetchOrFallback(
+    const result = await fetchOrFallback(
       `/api/patients/${id}`,
       {
         method: 'PATCH',
@@ -256,6 +265,16 @@ export const api = {
       },
       () => localDb.updatePatient(id, data)
     ).then(res => (res as any).patient || res);
+
+    if (typeof window !== 'undefined') {
+      try {
+        localDb.generateRecurrentAppointments();
+      } catch (e) {
+        console.error('Failed to generate recurrent appointments on patient update', e);
+      }
+    }
+
+    return result;
   },
 
   // Webhook test

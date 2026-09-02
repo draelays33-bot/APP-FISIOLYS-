@@ -91,6 +91,77 @@ function saveLocalData(data: LocalDBData) {
   }
 }
 
+/**
+ * Verifica se o paciente está inativo, com tratamento concluído/alta médica ou trancado,
+ * para interromper imediatamente a criação de agendamentos recorrentes automáticos.
+ */
+export function isPatientInactiveOrCompleted(patient?: Partial<Patient> | null): boolean {
+  if (!patient) return false;
+
+  // 1. Trancamento explícito de sessões
+  if (patient.isLocked) return true;
+
+  // 2. Status booleano explícito
+  if (patient.isActive === false) return true;
+
+  // 3. Status de tratamento explícito
+  if (patient.treatmentStatus) {
+    const ts = patient.treatmentStatus.toLowerCase().trim();
+    if (['concluido', 'concluído', 'alta', 'inativo', 'interrompido', 'finalizado', 'desativado'].includes(ts)) {
+      return true;
+    }
+  }
+
+  // Normalização de texto (remove acentos, espaços extras e converte para minúsculas)
+  const normalize = (str?: string) => {
+    if (!str) return '';
+    return str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  };
+
+  const inactiveKeywords = [
+    'inativ',        // inativo, inativa, inativado, inativação
+    'conclu',        // concluído, concluido, conclusao, tratamento concluido
+    'alta',          // alta, alta clinica, alta medica, recebeu alta
+    'desativ',       // desativado, desativada
+    'finaliz',       // finalizado, finalizada
+    'interromp',     // interrompido, interrompida, tratamento interrompido
+    'trancad',       // trancado, trancada, sessoes trancadas
+    'pausad',        // pausado, pausada
+    'cancelad',      // cancelado, cancelada
+    'abandon',       // abandono, abandonou
+    'encerrad'       // encerrado, encerrada, encerramento
+  ];
+
+  // 4. Rótulo de status (statusTag)
+  const statusTagNorm = normalize(patient.statusTag);
+  if (statusTagNorm && inactiveKeywords.some(kw => statusTagNorm.includes(kw))) {
+    return true;
+  }
+
+  // 5. Tags customizadas do paciente
+  if (Array.isArray(patient.tags)) {
+    const hasInactiveTag = patient.tags.some(tag => {
+      const tagNorm = normalize(tag);
+      return inactiveKeywords.some(kw => tagNorm.includes(kw));
+    });
+    if (hasInactiveTag) return true;
+  }
+
+  // 6. Categoria do paciente
+  if (patient.category) {
+    const catNorm = normalize(String(patient.category));
+    if (['inativo', 'concluido', 'alta', 'desativado'].some(kw => catNorm.includes(kw))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export const localDb = {
   getClinic(): ClinicConfig {
     const data = loadLocalData();
@@ -263,6 +334,104 @@ export const localDb = {
     return result;
   },
 
+  isPatientInactiveOrCompleted(patient?: Partial<Patient> | null): boolean {
+    return isPatientInactiveOrCompleted(patient);
+  },
+
+  generateRecurrentAppointments(): number {
+    const data = loadLocalData();
+    let generatedCount = 0;
+    const HORIZON_DAYS = 60;
+    
+    // Get today's date in YYYY-MM-DD
+    const todayStr = new Date().toISOString().split('T')[0];
+    const [ty, tm, td] = todayStr.split('-').map(Number);
+    const today = new Date(ty, tm - 1, td);
+    
+    const baseTimestamp = Date.now();
+
+    data.patients.forEach(patient => {
+      // 🛡️ VERIFICAÇÃO AUTOMÁTICA: Paciente inativado, tratamento concluído, alta médica ou trancado
+      if (localDb.isPatientInactiveOrCompleted(patient)) {
+        return; // Interrompe imediatamente a criação de novos agendamentos para esse paciente
+      }
+      if (!patient.recurrenceConfig) return;
+      if (!patient.recurrenceConfig.days || patient.recurrenceConfig.days.length === 0) return;
+
+      const { frequencyType, days, startDate } = patient.recurrenceConfig;
+      
+      const startRuleDate = startDate ? new Date(Number(startDate.split('-')[0]), Number(startDate.split('-')[1]) - 1, Number(startDate.split('-')[2])) : today;
+      const generationStart = startRuleDate > today ? startRuleDate : today;
+
+      const patientAppts = data.appointments.filter(
+        a => a.patientPhone === patient.phone || a.patientName.toLowerCase() === patient.name.toLowerCase()
+      );
+
+      // Find future auto-generated appointments to clean up if they don't match the current rule
+      // OR to prevent duplicates
+      const targetDays = days.map(d => ({
+        dow: Number(d.dayOfWeek),
+        time: d.time
+      }));
+
+      for (let dayOffset = 0; dayOffset <= HORIZON_DAYS; dayOffset++) {
+        const nextDate = new Date(generationStart.getFullYear(), generationStart.getMonth(), generationStart.getDate() + dayOffset);
+        const dow = nextDate.getDay();
+        
+        const match = targetDays.find(t => t.dow === dow);
+        if (match) {
+          const ny = nextDate.getFullYear();
+          const nm = String(nextDate.getMonth() + 1).padStart(2, '0');
+          const nd = String(nextDate.getDate()).padStart(2, '0');
+          const isoDate = `${ny}-${nm}-${nd}`;
+
+          // Check if an appointment already exists on this EXACT date for this patient
+          // We look for any appointment on this date (so if they manually moved the time, it won't duplicate)
+          const existsOnDate = patientAppts.some(a => a.date === isoDate && a.status !== 'cancelado');
+          
+          if (!existsOnDate) {
+            const service = data.services.find(s => s.id === patient.currentServiceId) || data.services[0];
+            
+            const newAppt: Appointment = {
+              id: `appt-auto-${baseTimestamp}-${generatedCount}`,
+              patientName: patient.name,
+              patientPhone: patient.phone,
+              patientEmail: patient.email || '',
+              patientBirthDate: patient.birthDate || undefined,
+              patientAddress: patient.address || undefined,
+              patientCity: patient.city || 'Altamira - PA',
+              patientCpf: patient.cpf || undefined,
+              serviceId: patient.currentServiceId || (service ? service.id : ''),
+              serviceName: patient.currentTreatment || (service ? service.name : 'Sessão Recorrente'),
+              servicePrice: patient.sessionPrice !== undefined ? patient.sessionPrice : (service ? service.price : 0),
+              durationMinutes: service ? service.durationMinutes : 50,
+              date: isoDate,
+              time: match.time,
+              frequencyType: frequencyType,
+              status: 'agendado',
+              notes: 'Agendamento recorrente automático.',
+              paymentMethod: 'pix',
+              attendanceStatus: 'pendente',
+              createdAt: new Date().toISOString(),
+              isAutoGenerated: true,
+              planScheduleSummary: patient.treatmentPlan || ''
+            };
+            
+            data.appointments.push(newAppt);
+            patientAppts.push(newAppt); // Add to local array to prevent same-day duplicates
+            generatedCount++;
+          }
+        }
+      }
+    });
+
+    if (generatedCount > 0) {
+      saveLocalData(data);
+    }
+    
+    return generatedCount;
+  },
+
   createAppointment(apptData: {
     patientName: string;
     patientPhone: string;
@@ -284,57 +453,132 @@ export const localDb = {
     const data = loadLocalData();
     const service = data.services.find(s => s.id === apptData.serviceId);
 
-    const newAppt: Appointment = {
-      id: `appt-${Date.now()}`,
-      patientName: apptData.patientName,
-      patientPhone: apptData.patientPhone,
-      patientEmail: apptData.patientEmail || '',
-      patientBirthDate: apptData.patientBirthDate || undefined,
-      patientAddress: apptData.patientAddress || undefined,
-      patientCity: apptData.patientCity || undefined,
-      patientCpf: apptData.patientCpf || undefined,
-      serviceId: apptData.serviceId,
-      serviceName: service?.name || 'Serviço',
-      servicePrice: service?.price || 0,
-      durationMinutes: service?.durationMinutes || 50,
-      date: apptData.date,
-      time: apptData.time,
-      frequencyType: apptData.frequencyType || 'sessao_unica',
-      selectedDaysSchedule: apptData.selectedDaysSchedule,
-      planScheduleSummary: apptData.planScheduleSummary,
-      multipleDates: apptData.multipleDates,
-      status: 'agendado',
-      notes: apptData.notes || (apptData.planScheduleSummary ? `Plano/Frequência: ${apptData.planScheduleSummary}` : ''),
-      paymentMethod: apptData.paymentMethod || 'pix',
-      attendanceStatus: 'pendente',
-      createdAt: new Date().toISOString()
-    };
+    // Calculate recurring session dates if weekly plan or multi-dates
+    const sessionDates: { date: string; time: string }[] = [];
+    if (apptData.multipleDates && apptData.multipleDates.length > 0) {
+      for (const m of apptData.multipleDates) {
+        if (m.date && m.time && !sessionDates.some(s => s.date === m.date && s.time === m.time)) {
+          sessionDates.push({ date: m.date, time: m.time });
+        }
+      }
+    } else {
+      sessionDates.push({ date: apptData.date, time: apptData.time });
+      if ((apptData.frequencyType === '2x_semana' || apptData.frequencyType === '3x_semana') && apptData.selectedDaysSchedule && apptData.selectedDaysSchedule.length > 0) {
+        const [y, m, d] = apptData.date.split('-').map(Number);
+        const targetDays = apptData.selectedDaysSchedule.map(s => ({
+          dayOfWeek: Number(s.dayOfWeek),
+          time: s.time || apptData.time
+        }));
 
-    data.appointments.push(newAppt);
+        for (let dayOffset = 1; dayOffset < 28; dayOffset++) {
+          const nextDate = new Date(y, m - 1, d + dayOffset);
+          const dow = nextDate.getDay();
+          const match = targetDays.find(t => t.dayOfWeek === dow);
+          if (match) {
+            const ny = nextDate.getFullYear();
+            const nm = String(nextDate.getMonth() + 1).padStart(2, '0');
+            const nd = String(nextDate.getDate()).padStart(2, '0');
+            const isoDate = `${ny}-${nm}-${nd}`;
+            if (!sessionDates.some(s => s.date === isoDate && s.time === match.time)) {
+              sessionDates.push({ date: isoDate, time: match.time });
+            }
+          }
+        }
+      }
+    }
 
-    // Sync patient list with all registration fields
-    const existingPatient = data.patients.find(p => p.phone === apptData.patientPhone || (apptData.patientEmail && p.email === apptData.patientEmail));
+    const planSummaryText = apptData.planScheduleSummary ||
+      (apptData.frequencyType === '2x_semana' ? 'Plano 2x por semana (4 semanas)' :
+       apptData.frequencyType === '3x_semana' ? 'Plano 3x por semana (4 semanas)' :
+       apptData.frequencyType === 'multiplos_dias' ? `${sessionDates.length} sessões agendadas` :
+       'Sessão Individual');
+
+    const createdList: Appointment[] = [];
+    const baseTimestamp = Date.now();
+
+    sessionDates.forEach((slot, index) => {
+      const appt: Appointment = {
+        id: `appt-${baseTimestamp}-${index}`,
+        patientName: apptData.patientName.trim(),
+        patientPhone: apptData.patientPhone.trim(),
+        patientEmail: apptData.patientEmail ? apptData.patientEmail.trim() : '',
+        patientBirthDate: apptData.patientBirthDate || undefined,
+        patientAddress: apptData.patientAddress ? apptData.patientAddress.trim() : undefined,
+        patientCity: apptData.patientCity ? apptData.patientCity.trim() : 'Altamira - PA',
+        patientCpf: apptData.patientCpf ? apptData.patientCpf.trim() : undefined,
+        serviceId: apptData.serviceId,
+        serviceName: service?.name || 'Serviço',
+        servicePrice: service?.price || 0,
+        durationMinutes: service?.durationMinutes || 50,
+        date: slot.date,
+        time: slot.time,
+        frequencyType: apptData.frequencyType || 'sessao_unica',
+        selectedDaysSchedule: apptData.selectedDaysSchedule,
+        planScheduleSummary: planSummaryText,
+        multipleDates: apptData.multipleDates,
+        status: 'agendado',
+        notes: apptData.notes ? apptData.notes.trim() : (sessionDates.length > 1 ? `Plano: ${planSummaryText} (${index + 1}/${sessionDates.length})` : ''),
+        paymentMethod: apptData.paymentMethod || 'pix',
+        attendanceStatus: 'pendente',
+        createdAt: new Date().toISOString()
+      };
+
+      createdList.push(appt);
+      data.appointments.push(appt);
+    });
+
+    const primaryAppt = createdList[0];
+
+    // Sync patient list with all registration fields and chosen treatment
+    const cleanPhone = apptData.patientPhone.replace(/\D/g, '');
+    const cleanName = apptData.patientName.trim().toLowerCase();
+
+    const existingPatient = data.patients.find(p => {
+      const pClean = p.phone.replace(/\D/g, '');
+      return (cleanPhone.length >= 6 && pClean.includes(cleanPhone)) || p.name.trim().toLowerCase() === cleanName;
+    });
+
+    const allDates = sessionDates.map(s => s.date).sort();
+    const firstDate = allDates[0] || apptData.date;
+    const lastDate = allDates[allDates.length - 1] || apptData.date;
+
     if (existingPatient) {
-      existingPatient.totalSessions += 1;
-      existingPatient.lastSessionDate = apptData.date;
+      existingPatient.totalSessions = (existingPatient.totalSessions || 0) + sessionDates.length;
+      existingPatient.lastSessionDate = lastDate;
+      if (!existingPatient.firstSessionDate) existingPatient.firstSessionDate = firstDate;
+      
+      // Update treatment fields
+      existingPatient.currentTreatment = service?.name || existingPatient.currentTreatment || 'Fisioterapia / Pilates';
+      existingPatient.currentServiceId = service?.id || existingPatient.currentServiceId;
+      existingPatient.treatmentPlan = planSummaryText;
+      existingPatient.sessionPrice = service?.price || existingPatient.sessionPrice;
+      if (service?.category) existingPatient.category = service.category;
+
       if (apptData.patientBirthDate && !existingPatient.birthDate) existingPatient.birthDate = apptData.patientBirthDate;
       if (apptData.patientEmail && !existingPatient.email) existingPatient.email = apptData.patientEmail;
       if (apptData.patientAddress && !existingPatient.address) existingPatient.address = apptData.patientAddress;
       if (apptData.patientCity && !existingPatient.city) existingPatient.city = apptData.patientCity;
       if (apptData.patientCpf && !existingPatient.cpf) existingPatient.cpf = apptData.patientCpf;
+      if (apptData.notes && !existingPatient.notes) existingPatient.notes = apptData.notes;
     } else {
       data.patients.push({
         id: `pat-${Date.now()}`,
-        name: apptData.patientName,
-        phone: apptData.patientPhone,
+        name: apptData.patientName.trim(),
+        phone: apptData.patientPhone.trim(),
         email: apptData.patientEmail || '',
         birthDate: apptData.patientBirthDate || undefined,
         address: apptData.patientAddress || undefined,
         city: apptData.patientCity || 'Altamira - PA',
         cpf: apptData.patientCpf || undefined,
-        totalSessions: 1,
-        lastSessionDate: apptData.date,
-        firstSessionDate: apptData.date,
+        totalSessions: sessionDates.length,
+        lastSessionDate: lastDate,
+        firstSessionDate: firstDate,
+        currentTreatment: service?.name || 'Fisioterapia / Pilates',
+        currentServiceId: service?.id,
+        treatmentPlan: planSummaryText,
+        sessionPrice: service?.price || 0,
+        category: service?.category || 'fisioterapia',
+        notes: apptData.notes || undefined,
         createdAt: new Date().toISOString()
       });
     }
@@ -348,13 +592,14 @@ export const localDb = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event: 'novo_agendamento',
-          appointment: newAppt,
+          appointment: primaryAppt,
+          allAppointments: createdList,
           clinic: data.clinic.name
         })
       }).catch(err => console.warn("Webhook failed in local mode:", err));
     }
 
-    return { appointment: newAppt, webhookSent: false };
+    return { appointment: primaryAppt, webhookSent: false };
   },
 
   updateAppointmentStatus(id: string, status: AppointmentStatus, notes?: string, attendanceStatus?: 'presenca' | 'falta' | 'pendente'): Appointment {
@@ -607,8 +852,24 @@ export const localDb = {
     const idx = data.patients.findIndex(p => p.id === id);
     if (idx !== -1) {
       data.patients[idx] = { ...data.patients[idx], ...update };
+      const updatedPatient = data.patients[idx];
+
+      // Se o paciente foi inativado, concluiu o tratamento ou trancou as sessões,
+      // interrompe a recorrência e limpa agendamentos futuros pendentes gerados automaticamente
+      if (localDb.isPatientInactiveOrCompleted(updatedPatient) || !updatedPatient.recurrenceConfig) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        data.appointments = data.appointments.filter(a => {
+          const isThisPatient = (a.patientPhone === updatedPatient.phone || a.patientName.toLowerCase() === updatedPatient.name.toLowerCase());
+          // Remove apenas agendamentos futuros gerados de forma automática e ainda pendentes/agendados
+          if (isThisPatient && a.isAutoGenerated && a.date >= todayStr && a.status === 'agendado') {
+            return false;
+          }
+          return true;
+        });
+      }
+
       saveLocalData(data);
-      return data.patients[idx];
+      return updatedPatient;
     }
     throw new Error('Paciente não encontrado');
   },

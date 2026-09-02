@@ -52,7 +52,8 @@ import {
   Tag,
   Palette,
   Database,
-  BookOpen
+  BookOpen,
+  CheckSquare
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -74,14 +75,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   initialTab,
   onReload,
 }) => {
-  // Normalize initialTab to one of the 5 main areas
+  // Normalize initialTab to one of the 5 main hubs
   const getNormalizedTab = (tab?: AdminTab): AdminTab => {
     if (!tab) return 'agenda';
     if (tab === 'dashboard' || tab === 'fidelidade') return 'financeiro';
     if (tab === 'horarios') return 'agenda';
-    if (tab === 'pacientes') return 'prontuario';
+    if (tab === 'pacientes' || tab === 'prontuario') return 'pacientes';
     if (tab === 'whatsapp' || tab === 'webhook') return 'crm';
-    if (tab === 'qrcode') return 'configuracoes';
+    if (tab === 'qrcode' || tab === 'servicos') return 'configuracoes';
     return tab;
   };
 
@@ -92,30 +93,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [agendaViewMode, setAgendaViewMode] = useState<'grid' | 'list'>('grid');
   const [searchPatientQuery, setSearchPatientQuery] = useState<string>('');
 
-  // Subtabs state for the 5 areas
-  const [agendaSubTab, setAgendaSubTab] = useState<'calendario' | 'horarios' | 'tarefas'>(
-    initialTab === 'horarios' ? 'horarios' : 'calendario'
-  );
-  const [prontuarioSubTab, setProntuarioSubTab] = useState<'avaliacoes' | 'evolucoes' | 'pacientes' | 'tcle' | 'templates'>(
-    initialTab === 'pacientes' ? 'pacientes' : 'avaliacoes'
-  );
-  const [financeiroSubTab, setFinanceiroSubTab] = useState<'visao_geral' | 'pagamentos' | 'fidelidade'>(
-    initialTab === 'fidelidade' ? 'fidelidade' : 'visao_geral'
-  );
-  const [crmSubTab, setCrmSubTab] = useState<'leads' | 'whatsapp' | 'webhook' | 'ia_clinica' | 'templates'>(
-    initialTab === 'whatsapp' ? 'whatsapp' : initialTab === 'webhook' ? 'webhook' : 'leads'
-  );
+  // Subtabs state for the 5 Hubs
+  const [agendaSubTab, setAgendaSubTab] = useState<'calendario' | 'tarefas'>('calendario');
+  const [pacientesSubTab, setPacientesSubTab] = useState<'lista' | 'avaliacoes' | 'evolucoes' | 'tcle'>('lista');
+  const [financeiroSubTab, setFinanceiroSubTab] = useState<'visao_geral' | 'recibos' | 'pendentes' | 'fidelidade'>('visao_geral');
+  const [crmSubTab, setCrmSubTab] = useState<'funil' | 'whatsapp' | 'automacoes'>('funil');
+  const [configSubTab, setConfigSubTab] = useState<'servicos' | 'ia_clinica' | 'metricas' | 'tarefas' | 'templates' | 'sistema'>('servicos');
 
   // Synchronize when parent passes updated initialTab
   useEffect(() => {
     if (initialTab) {
       const norm = getNormalizedTab(initialTab);
       setActiveTab(norm);
-      if (initialTab === 'horarios') setAgendaSubTab('horarios');
-      if (initialTab === 'pacientes') setProntuarioSubTab('pacientes');
-      if (initialTab === 'fidelidade') setFinanceiroSubTab('fidelidade');
-      if (initialTab === 'whatsapp') setCrmSubTab('whatsapp');
-      if (initialTab === 'webhook') setCrmSubTab('webhook');
+      if (initialTab === 'horarios') {
+        setActiveTab('configuracoes');
+        setConfigSubTab('sistema');
+      }
+      if (initialTab === 'servicos') {
+        setActiveTab('configuracoes');
+        setConfigSubTab('servicos');
+      }
+      if (initialTab === 'pacientes' || initialTab === 'prontuario') {
+        setActiveTab('pacientes');
+        setPacientesSubTab('lista');
+      }
+      if (initialTab === 'fidelidade') {
+        setActiveTab('financeiro');
+        setFinanceiroSubTab('fidelidade');
+      }
+      if (initialTab === 'whatsapp') {
+        setActiveTab('crm');
+        setCrmSubTab('whatsapp');
+      }
+      if (initialTab === 'webhook') {
+        setActiveTab('crm');
+        setCrmSubTab('automacoes');
+      }
+      if (initialTab === 'qrcode') {
+        setActiveTab('configuracoes');
+        setConfigSubTab('sistema');
+      }
     }
   }, [initialTab]);
 
@@ -140,12 +157,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [financialPasswordUnlocked, setFinancialPasswordUnlocked] = useState<boolean>(true);
   const [financialPasswordInput, setFinancialPasswordInput] = useState<string>('');
   const [financialPasswordError, setFinancialPasswordError] = useState<string>('');
-  const [financialPaymentSubTab, setFinancialPaymentSubTab] = useState<'pendentes' | 'recebidos'>('pendentes');
 
   // Shortcut to open financial tab directly at specific sub-view
   const handleGoToFinancial = (subTab: 'pendentes' | 'recebidos' = 'pendentes') => {
-    setFinancialPaymentSubTab(subTab);
-    setFinanceiroSubTab('pagamentos');
+    if (subTab === 'recebidos') {
+      setFinanceiroSubTab('recibos');
+    } else {
+      setFinanceiroSubTab('pendentes');
+    }
     setFinancialPasswordUnlocked(true);
     setActiveTab('financeiro');
   };
@@ -390,258 +409,89 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     <div className="min-h-[calc(100vh-4rem)] bg-slate-50/60 pb-12 pt-4 px-3 sm:px-6">
       <div className="max-w-7xl mx-auto">
 
-        {/* 📊 EXECUTIVE TOP SUMMARY CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 mb-6">
-
-          {/* Card 1: Agendamentos do Dia (Emerald / Forest Green) */}
-          <div className="bg-white rounded-2xl p-4 border border-emerald-200/90 shadow-2xs hover:shadow-md transition-all relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 rounded-full -mr-6 -mt-6 pointer-events-none group-hover:scale-125 transition-transform" />
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-100/90 px-2.5 py-0.5 rounded-full">
-                Sessões de Hoje
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
-                <CalendarIcon className="w-5 h-5" />
-              </div>
-            </div>
-            <div className="mt-1">
-              <div className="flex items-baseline space-x-2">
-                <span className="text-2xl sm:text-3xl font-black text-slate-900">{todayAppointments.length}</span>
-                <span className="text-xs font-extrabold text-emerald-700">agendamento(s)</span>
-              </div>
-              <p className="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1.5 flex-wrap">
-                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="font-semibold text-slate-700">{completedToday.length} concluído(s)</span>
-                <span className="text-slate-300">•</span>
-                <span className="font-semibold text-amber-700">{pendingToday.length} pendente(s)</span>
-              </p>
-            </div>
-            <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-between items-center">
-              <button
-                id="btn-card-goto-agenda"
-                onClick={handleOpenTodayAgenda}
-                className="text-xs font-bold text-emerald-800 hover:text-emerald-950 flex items-center space-x-1 hover:underline cursor-pointer"
-                title="Visualizar a agenda completa e atendimentos de hoje"
-              >
-                <span>Ver Agenda de Hoje</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Card 2: Pagamentos Pendentes (Amber / Golden Rose Alert) */}
-          <div className={`bg-white rounded-2xl p-4 border shadow-2xs hover:shadow-md transition-all relative overflow-hidden group ${
-            totalPendingPaymentsCount > 0 ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200/90'
-          }`}>
-            <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 rounded-full -mr-6 -mt-6 pointer-events-none group-hover:scale-125 transition-transform" />
-            <div className="flex items-center justify-between mb-2">
-              <span className={`text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
-                totalPendingPaymentsCount > 0 ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-700'
-              }`}>
-                Pagamentos Pendentes
-              </span>
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${
-                totalPendingPaymentsCount > 0 ? 'bg-amber-100 text-amber-800 ring-2 ring-amber-300/50' : 'bg-slate-100 text-slate-600'
-              }`}>
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-            </div>
-            <div className="mt-1">
-              <div className="flex items-baseline space-x-2">
-                <span className="text-2xl sm:text-3xl font-black text-slate-900">{formatCurrency(totalPendingPaymentsAmount)}</span>
-              </div>
-              <p className="text-xs text-slate-600 mt-1 font-medium">
-                {totalPendingPaymentsCount === 0 ? (
-                  <span className="text-emerald-600 font-bold flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>Nenhum valor pendente!</span>
-                  </span>
-                ) : (
-                  <span>
-                    <strong className="text-amber-900">{totalPendingPaymentsCount} pendência(s)</strong> ({pendingAppointments.length} sessões + {overdueLoyaltyMembers.length} clube)
-                  </span>
-                )}
-              </p>
-            </div>
-            <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-between items-center">
-              <button
-                id="btn-card-goto-financeiro-pendentes"
-                onClick={() => handleGoToFinancial('pendentes')}
-                className="text-xs font-bold text-amber-900 hover:text-amber-950 flex items-center space-x-1 hover:underline cursor-pointer"
-              >
-                <span>⚡ Ver Cobranças Pendentes</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Card 3: Previsão de Receita / Faturamento (Teal / Cyan) */}
-          <div className="bg-white rounded-2xl p-4 border border-teal-200/90 shadow-2xs hover:shadow-md transition-all relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-teal-500/5 rounded-full -mr-6 -mt-6 pointer-events-none group-hover:scale-125 transition-transform" />
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-teal-800 bg-teal-100/90 px-2.5 py-0.5 rounded-full">
-                Receita & Recibos
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center shrink-0 shadow-2xs">
-                <TrendingUp className="w-5 h-5" />
-              </div>
-            </div>
-            <div className="mt-1">
-              <div className="flex items-baseline space-x-2">
-                <span className="text-2xl sm:text-3xl font-black text-slate-900">{formatCurrency(totalRevenueEstimated)}</span>
-              </div>
-              <p className="text-xs text-slate-500 mt-1 font-medium">
-                Soma dos atendimentos ativos cadastrados
-              </p>
-            </div>
-            <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-between items-center">
-              <button
-                id="btn-card-goto-financeiro-recibos"
-                onClick={() => handleGoToFinancial('recebidos')}
-                className="text-xs font-bold text-teal-800 hover:text-teal-950 flex items-center space-x-1 hover:underline cursor-pointer"
-              >
-                <span>📄 Ver Histórico & Recibos em PDF</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Card 4: Pacientes Ativos & Clube Fidelidade (Purple / Crown) */}
-          <div className="bg-white rounded-2xl p-4 border border-purple-200/90 shadow-2xs hover:shadow-md transition-all relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-full -mr-6 -mt-6 pointer-events-none group-hover:scale-125 transition-transform" />
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-purple-800 bg-purple-100/90 px-2.5 py-0.5 rounded-full">
-                Pacientes & Clube
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 shadow-2xs">
-                <Crown className="w-5 h-5 text-[#D0A73B]" />
-              </div>
-            </div>
-            <div className="mt-1">
-              <div className="flex items-baseline space-x-2">
-                <span className="text-2xl sm:text-3xl font-black text-slate-900">{activePatientCount}</span>
-                <span className="text-xs font-extrabold text-purple-700">pacientes</span>
-              </div>
-              <p className="text-xs text-slate-500 mt-1 font-medium">
-                <strong className="text-purple-900 font-bold">{activeLoyaltyCount}</strong> no Clube Fidelidade R$ 99
-              </p>
-            </div>
-            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
-              <button
-                id="btn-card-goto-pacientes-tags"
-                onClick={() => {
-                  setActiveTab('prontuario');
-                  setProntuarioSubTab('pacientes');
-                }}
-                className="text-xs font-bold text-[#1B2E24] hover:text-teal-900 flex items-center space-x-1 hover:underline cursor-pointer"
-                title="Ver pacientes organizados por categorias e tags de cores"
-              >
-                <Tag className="w-3.5 h-3.5 text-[#D0A73B]" />
-                <span>Categorias & Tags</span>
-              </button>
-
-              <button
-                id="btn-card-goto-fidelidade"
-                onClick={() => {
-                  setActiveTab('financeiro');
-                  setFinanceiroSubTab('fidelidade');
-                }}
-                className="text-xs font-bold text-purple-800 hover:text-purple-950 flex items-center space-x-1 hover:underline cursor-pointer"
-              >
-                <span>Clube R$99</span>
-                <ChevronRight className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-
-        </div>
-
-        {/* Unified 5-Area Navigation Menu */}
+        {/* ========================================================================= */}
+        {/* REORGANIZAÇÃO: 5 HUBS PRINCIPAIS DA ÁREA DA DRA. ELAYS                   */}
+        {/* ========================================================================= */}
         <div className="bg-white rounded-2xl p-2 shadow-2xs border border-[#C9D8CB] mb-6 flex items-center justify-between gap-2">
           <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar flex-1">
-            {/* Area 1: Agenda Eletrônica */}
+            {/* Hub 1: Agenda */}
             <button
               id="tab-agenda"
               onClick={() => setActiveTab('agenda')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
+              className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
                 activeTab === 'agenda'
                   ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-sm ring-1 ring-[#DCC58F]/40'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
               }`}
             >
               <CalendarIcon className={`w-4 h-4 ${activeTab === 'agenda' ? 'text-[#DCC58F]' : 'text-[#1B2E24]'}`} />
-              <span>1. Agenda Eletrônica</span>
+              <span>1. Agenda</span>
             </button>
 
-            {/* Area 2: Prontuário do Paciente */}
+            {/* Hub 2: Pacientes */}
             <button
-              id="tab-prontuario"
-              onClick={() => setActiveTab('prontuario')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
-                activeTab === 'prontuario'
+              id="tab-pacientes"
+              onClick={() => setActiveTab('pacientes')}
+              className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
+                activeTab === 'pacientes' || activeTab === 'prontuario'
                   ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-sm ring-1 ring-[#DCC58F]/40'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
               }`}
             >
-              <Users className={`w-4 h-4 ${activeTab === 'prontuario' ? 'text-[#DCC58F]' : 'text-[#1B2E24]'}`} />
-              <span>2. Prontuário do Paciente</span>
+              <Users className={`w-4 h-4 ${activeTab === 'pacientes' || activeTab === 'prontuario' ? 'text-[#DCC58F]' : 'text-[#1B2E24]'}`} />
+              <span>2. Pacientes</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                activeTab === 'pacientes' || activeTab === 'prontuario'
+                  ? 'bg-[#DCC58F]/20 text-[#DCC58F]'
+                  : 'bg-slate-100 text-slate-600'
+              }`}>
+                {patients.length}
+              </span>
             </button>
 
-            {/* Area 3: Financeiro */}
+            {/* Hub 3: Financeiro */}
             <button
               id="tab-financeiro"
               onClick={() => setActiveTab('financeiro')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
+              className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
                 activeTab === 'financeiro'
                   ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-sm ring-1 ring-[#DCC58F]/40'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
               }`}
             >
               <DollarSign className={`w-4 h-4 ${activeTab === 'financeiro' ? 'text-[#DCC58F]' : 'text-[#1B2E24]'}`} />
-              <span>3. Financeiro & Recibos</span>
+              <span>3. Financeiro</span>
+              {totalPendingPaymentsCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+              )}
             </button>
 
-            {/* Area 4: Serviços & Planos */}
-            <button
-              id="tab-servicos"
-              onClick={() => setActiveTab('servicos')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
-                activeTab === 'servicos'
-                  ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-sm ring-1 ring-[#DCC58F]/40'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
-              }`}
-            >
-              <Briefcase className={`w-4 h-4 ${activeTab === 'servicos' ? 'text-[#DCC58F]' : 'text-[#1B2E24]'}`} />
-              <span>4. Serviços & Planos ({services.length})</span>
-            </button>
-
-            {/* Area 5: CRM & Comunicação */}
+            {/* Hub 4: CRM */}
             <button
               id="tab-crm"
               onClick={() => setActiveTab('crm')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
+              className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
                 activeTab === 'crm'
                   ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-sm ring-1 ring-[#DCC58F]/40'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
               }`}
             >
-              <Brain className={`w-4 h-4 ${activeTab === 'crm' ? 'text-[#DCC58F]' : 'text-[#B44A2E]'}`} />
-              <span>5. CRM & Comunicação</span>
+              <MessageSquare className={`w-4 h-4 ${activeTab === 'crm' ? 'text-[#DCC58F]' : 'text-[#1B2E24]'}`} />
+              <span>4. CRM</span>
             </button>
 
-            {/* Settings & QR */}
+            {/* Hub 5: Administração / Configuração */}
             <button
               id="tab-configuracoes"
               onClick={() => setActiveTab('configuracoes')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+              className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
                 activeTab === 'configuracoes'
-                  ? 'bg-[#31523D] text-white shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800 hover:bg-[#F4F7F4]'
+                  ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-sm ring-1 ring-[#DCC58F]/40'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F4F7F4]'
               }`}
-              title="Configurações e Links"
             >
-              <Settings className="w-4 h-4 text-[#D0A73B]" />
-              <span className="hidden sm:inline">Configurações</span>
+              <Settings className={`w-4 h-4 ${activeTab === 'configuracoes' ? 'text-[#DCC58F]' : 'text-[#1B2E24]'}`} />
+              <span>5. Configuração</span>
             </button>
           </div>
 
@@ -654,17 +504,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   setActiveTab('financeiro');
                   setFinanceiroSubTab('fidelidade');
                 } else if (tab === 'horarios') {
-                  setActiveTab('agenda');
-                  setAgendaSubTab('horarios');
-                } else if (tab === 'pacientes') {
-                  setActiveTab('prontuario');
-                  setProntuarioSubTab('pacientes');
+                  setActiveTab('configuracoes');
+                  setConfigSubTab('sistema');
+                } else if (tab === 'pacientes' || tab === 'prontuario') {
+                  setActiveTab('pacientes');
+                  setPacientesSubTab('lista');
                 } else if (tab === 'whatsapp') {
                   setActiveTab('crm');
                   setCrmSubTab('whatsapp');
                 } else if (tab === 'webhook') {
                   setActiveTab('crm');
-                  setCrmSubTab('webhook');
+                  setCrmSubTab('automacoes');
+                } else if (tab === 'servicos') {
+                  setActiveTab('configuracoes');
+                  setConfigSubTab('servicos');
                 } else {
                   setActiveTab(getNormalizedTab(tab));
                 }
@@ -674,7 +527,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         {/* ========================================================================= */}
-        {/* ÁREA 1: AGENDA ELETRÔNICA (Google Calendar, Horários, Encaixes, Tarefas) */}
+        {/* HUB 1: AGENDA (Agenda Eletrônica, Encaixes, Lembretes & Tarefas)           */}
         {/* ========================================================================= */}
         {activeTab === 'agenda' && (
           <div className="space-y-4">
@@ -683,48 +536,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
                 <button
                   onClick={() => setAgendaSubTab('calendario')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
                     agendaSubTab === 'calendario'
-                      ? 'bg-[#31523D] text-white shadow-xs'
+                      ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
                       : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <CalendarIcon className="w-3.5 h-3.5 text-[#D0A73B]" />
-                  <span>Calendário Google (Dia/Semana/Mês)</span>
-                </button>
-
-                <button
-                  onClick={() => setAgendaSubTab('horarios')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
-                    agendaSubTab === 'horarios'
-                      ? 'bg-[#31523D] text-white shadow-xs'
-                      : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  <Clock className="w-3.5 h-3.5 text-[#D0A73B]" />
-                  <span>Horários de Atendimento & Limites</span>
+                  <CalendarIcon className="w-3.5 h-3.5 text-[#DCC58F]" />
+                  <span>Agenda Eletrônica (Google Calendar / Grade)</span>
                 </button>
 
                 <button
                   onClick={() => setAgendaSubTab('tarefas')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
                     agendaSubTab === 'tarefas'
-                      ? 'bg-[#31523D] text-white shadow-xs'
+                      ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
                       : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <CheckCircle2 className="w-3.5 h-3.5 text-[#D0A73B]" />
-                  <span>Lembretes & Tarefas do Dia</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#DCC58F]" />
+                  <span>Lembretes & Tarefas Clínicas</span>
                 </button>
               </div>
 
               <button
                 id="btn-open-manual-booking-agenda"
                 onClick={() => setIsManualApptOpen(true)}
-                className="px-3.5 py-1.5 rounded-xl font-bold text-xs bg-teal-700 hover:bg-teal-800 text-white shadow-xs flex items-center space-x-1 cursor-pointer shrink-0"
+                className="px-4 py-2 rounded-xl font-bold text-xs bg-teal-700 hover:bg-teal-800 text-white shadow-xs flex items-center space-x-1 cursor-pointer shrink-0"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>+ Novo Encaixe</span>
+                <span>+ Novo Encaixe / Agendamento</span>
               </button>
             </div>
 
@@ -742,10 +583,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               />
             )}
 
-            {agendaSubTab === 'horarios' && (
-              <AdminSchedule schedule={schedule} onReload={onReload} />
-            )}
-
             {agendaSubTab === 'tarefas' && (
               <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-2xs space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -754,7 +591,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       Tarefas Clínicas & Follow-up de Atendimentos
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Acompanhamento de retornos, envio de planos e orientações pós-atendimento.
+                      Acompanhamento de retornos, envio de planos e orientações pós-atendimento da Dra. Elays.
                     </p>
                   </div>
                 </div>
@@ -763,8 +600,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/50 flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="text-xs font-bold text-slate-800">Follow-up pós-avaliação (Pilates)</h4>
-                      <p className="text-[11px] text-slate-600 mt-0.5">Paciente: Maria Fernanda Silva • Enviar plano sugerido.</p>
+                      <h4 className="text-xs font-bold text-slate-800">Follow-up pós-avaliação (Pilates Studio)</h4>
+                      <p className="text-[11px] text-slate-600 mt-0.5">Paciente: Maria Fernanda Silva • Enviar plano sugerido de 2x na semana.</p>
                       <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-900">
                         Prioridade Alta
                       </span>
@@ -775,7 +612,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
                       <h4 className="text-xs font-bold text-slate-800">Confirmar retorno de reavaliação de coluna</h4>
-                      <p className="text-[11px] text-slate-600 mt-0.5">Paciente: Carlos Eduardo Santos • 30 dias de evolução.</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5">Paciente: Carlos Eduardo Santos • 30 dias de evolução concluídos.</p>
                       <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-200 text-emerald-900">
                         Agendado
                       </span>
@@ -797,7 +634,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <Users className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
                     <div>
                       <h4 className="text-xs font-bold text-slate-800">Confirmar turma de Pilates das 18h</h4>
-                      <p className="text-[11px] text-slate-600 mt-0.5">Turma 02 • 3 alunas confirmadas para hoje.</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5">Turma 02 • 3 alunas confirmadas para hoje com frequência regular.</p>
                       <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded bg-purple-200 text-purple-900">
                         Hoje
                       </span>
@@ -810,104 +647,116 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
 
         {/* ========================================================================= */}
-        {/* ÁREA 2: PRONTUÁRIO ELETRÔNICO DO PACIENTE (Avaliações, Evoluções, TCLE)    */}
+        {/* HUB 2: PACIENTES (Lista, Avaliações, Evoluções, TCLE)                      */}
         {/* ========================================================================= */}
-        {activeTab === 'prontuario' && (
+        {(activeTab === 'pacientes' || activeTab === 'prontuario') && (
           <div className="space-y-4">
-            {/* Sub-nav pills for Prontuário */}
+            {/* Sub-nav pills for Pacientes */}
             <div className="flex items-center gap-1.5 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-auto pb-1 sm:pb-0">
               <button
-                onClick={() => setProntuarioSubTab('avaliacoes')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
-                  prontuarioSubTab === 'avaliacoes'
-                    ? 'bg-[#31523D] text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <ClipboardList className="w-3.5 h-3.5 text-[#D0A73B]" />
-                <span>Fichas de Avaliação Clínica</span>
-              </button>
-
-              <button
-                onClick={() => setProntuarioSubTab('evolucoes')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
-                  prontuarioSubTab === 'evolucoes'
-                    ? 'bg-[#31523D] text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <TrendingUp className="w-3.5 h-3.5 text-[#D0A73B]" />
-                <span>Evoluções das Sessões</span>
-              </button>
-
-              <button
-                onClick={() => setProntuarioSubTab('pacientes')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
-                  prontuarioSubTab === 'pacientes'
+                id="tab-pacientes-sub-lista"
+                onClick={() => setPacientesSubTab('lista')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  pacientesSubTab === 'lista'
                     ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                <Tag className="w-3.5 h-3.5 text-[#D0A73B]" />
-                <span>Pacientes (Categorias & Tags) ({patients.length})</span>
+                <Users className="w-3.5 h-3.5 text-[#DCC58F]" />
+                <span>Lista de Pacientes & Tags ({patients.length})</span>
               </button>
 
               <button
-                onClick={() => setProntuarioSubTab('tcle')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
-                  prontuarioSubTab === 'tcle'
-                    ? 'bg-[#31523D] text-white shadow-xs'
+                id="tab-pacientes-sub-avaliacoes"
+                onClick={() => setPacientesSubTab('avaliacoes')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  pacientesSubTab === 'avaliacoes'
+                    ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                <ShieldCheck className="w-3.5 h-3.5 text-[#D0A73B]" />
+                <ClipboardList className="w-3.5 h-3.5 text-[#DCC58F]" />
+                <span>Fichas de Avaliação Clínica</span>
+              </button>
+
+              <button
+                id="tab-pacientes-sub-evolucoes"
+                onClick={() => setPacientesSubTab('evolucoes')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  pacientesSubTab === 'evolucoes'
+                    ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5 text-[#DCC58F]" />
+                <span>Evoluções das Sessões</span>
+              </button>
+
+              <button
+                id="tab-pacientes-sub-tcle"
+                onClick={() => setPacientesSubTab('tcle')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  pacientesSubTab === 'tcle'
+                    ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-[#DCC58F]" />
                 <span>TCLE & Contratos Assinados</span>
-              </button>
-
-              <button
-                id="tab-prontuario-templates"
-                onClick={() => setProntuarioSubTab('templates')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
-                  prontuarioSubTab === 'templates'
-                    ? 'bg-[#B08A3E] text-white shadow-xs font-bold'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <BookOpen className="w-3.5 h-3.5 text-[#D0A73B]" />
-                <span>Templates da Dra. Elays</span>
               </button>
             </div>
 
-            {/* Sub-view rendering for Prontuário */}
-            {prontuarioSubTab === 'avaliacoes' && (
-              <FisiolysCRM initialTab="avaliacoes" />
-            )}
-
-            {prontuarioSubTab === 'evolucoes' && (
-              <FisiolysCRM initialTab="evolucoes" />
-            )}
-
-            {prontuarioSubTab === 'pacientes' && (
+            {/* Sub-view rendering for Pacientes */}
+            {pacientesSubTab === 'lista' && (
               <AdminPatients
                 patients={patients}
                 appointments={appointments}
+                services={services}
                 clinic={clinic}
                 onReload={onReload}
               />
             )}
 
-            {prontuarioSubTab === 'tcle' && (
-              <FisiolysCRM initialTab="tcle" />
+            {pacientesSubTab === 'avaliacoes' && (
+              <FisiolysCRM 
+                hub="pacientes" 
+                initialTab="avaliacoes" 
+                onTabChange={(t) => {
+                  if (t === 'avaliacoes' || t === 'evolucoes' || t === 'tcle') {
+                    setPacientesSubTab(t);
+                  }
+                }}
+              />
             )}
 
-            {prontuarioSubTab === 'templates' && (
-              <FisiolysCRM initialTab="templates" />
+            {pacientesSubTab === 'evolucoes' && (
+              <FisiolysCRM 
+                hub="pacientes" 
+                initialTab="evolucoes" 
+                onTabChange={(t) => {
+                  if (t === 'avaliacoes' || t === 'evolucoes' || t === 'tcle') {
+                    setPacientesSubTab(t);
+                  }
+                }}
+              />
+            )}
+
+            {pacientesSubTab === 'tcle' && (
+              <FisiolysCRM 
+                hub="pacientes" 
+                initialTab="tcle" 
+                onTabChange={(t) => {
+                  if (t === 'avaliacoes' || t === 'evolucoes' || t === 'tcle') {
+                    setPacientesSubTab(t);
+                  }
+                }}
+              />
             )}
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* ÁREA 3: FINANCEIRO (Faturamento, Pendentes/Recebidos, Clube Fidelidade)     */}
+        {/* HUB 3: FINANCEIRO (Receita & Recibos, Cobranças Pendentes, Faturamento)    */}
         {/* ========================================================================= */}
         {activeTab === 'financeiro' && (
           !financialPasswordUnlocked ? (
@@ -924,7 +773,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   Área de Gestão Financeira
                 </h3>
                 <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
-                  Esta área contém relatórios e faturamento restrito. Digite a senha do Administrador para acessar.
+                  Esta área contém relatórios e faturamento restrito. Digite a senha da Dra. Elays para acessar.
                 </p>
               </div>
 
@@ -993,34 +842,55 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {/* Sub-nav pills for Financeiro */}
               <div className="flex items-center gap-1.5 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-auto pb-1 sm:pb-0">
                 <button
+                  id="tab-fin-sub-visao"
                   onClick={() => setFinanceiroSubTab('visao_geral')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
                     financeiroSubTab === 'visao_geral'
-                      ? 'bg-[#31523D] text-white shadow-xs'
+                      ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
                       : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <TrendingUp className="w-3.5 h-3.5 text-[#D0A73B]" />
+                  <TrendingUp className="w-3.5 h-3.5 text-[#DCC58F]" />
                   <span>Visão Geral & Faturamento</span>
                 </button>
 
                 <button
-                  onClick={() => setFinanceiroSubTab('pagamentos')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
-                    financeiroSubTab === 'pagamentos'
-                      ? 'bg-[#31523D] text-white shadow-xs'
+                  id="tab-fin-sub-recibos"
+                  onClick={() => setFinanceiroSubTab('recibos')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                    financeiroSubTab === 'recibos'
+                      ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
                       : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <DollarSign className="w-3.5 h-3.5 text-[#D0A73B]" />
-                  <span>Pagamentos & Emissão de Recibos PDF</span>
+                  <DollarSign className="w-3.5 h-3.5 text-[#DCC58F]" />
+                  <span>Receita & Recibos em PDF</span>
                 </button>
 
                 <button
+                  id="tab-fin-sub-pendentes"
+                  onClick={() => setFinanceiroSubTab('pendentes')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                    financeiroSubTab === 'pendentes'
+                      ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Pagamentos & Cobranças Pendentes</span>
+                  {totalPendingPaymentsCount > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-bold">
+                      {totalPendingPaymentsCount}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  id="tab-fin-sub-fidelidade"
                   onClick={() => setFinanceiroSubTab('fidelidade')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
                     financeiroSubTab === 'fidelidade'
-                      ? 'bg-[#B08A3E] text-white shadow-xs'
+                      ? 'bg-[#B08A3E] text-white shadow-xs font-bold'
                       : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
@@ -1172,12 +1042,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               )}
 
-              {financeiroSubTab === 'pagamentos' && (
+              {financeiroSubTab === 'recibos' && (
                 <AdminFinancial
                   clinic={clinic}
                   appointments={appointments}
                   patients={patients}
-                  initialTab={financialPaymentSubTab}
+                  initialTab="recebidos"
+                  onReload={onReload}
+                />
+              )}
+
+              {financeiroSubTab === 'pendentes' && (
+                <AdminFinancial
+                  clinic={clinic}
+                  appointments={appointments}
+                  patients={patients}
+                  initialTab="pendentes"
                   onReload={onReload}
                 />
               )}
@@ -1190,111 +1070,225 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
 
         {/* ========================================================================= */}
-        {/* ÁREA 4: SERVIÇOS & PLANOS (Catálogo Integrado e Planos Alternativos)      */}
-        {/* ========================================================================= */}
-        {activeTab === 'servicos' && (
-          <AdminServices services={services} onReload={onReload} />
-        )}
-
-        {/* ========================================================================= */}
-        {/* ÁREA 5: CRM & COMUNICAÇÃO (Leads, WhatsApp, Webhooks, IA Clínica)        */}
+        {/* HUB 4: CRM (Funil de Leads, Disparos WhatsApp, Automações & Webhooks)     */}
         {/* ========================================================================= */}
         {activeTab === 'crm' && (
           <div className="space-y-4">
-            {/* Sub-nav pills for CRM & Comunicação */}
+            {/* Sub-nav pills for CRM */}
             <div className="flex items-center gap-1.5 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-auto pb-1 sm:pb-0">
               <button
-                onClick={() => setCrmSubTab('leads')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
-                  crmSubTab === 'leads'
-                    ? 'bg-[#31523D] text-white shadow-xs'
+                id="tab-crm-sub-funil"
+                onClick={() => setCrmSubTab('funil')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  crmSubTab === 'funil'
+                    ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                <Users className="w-3.5 h-3.5 text-[#D0A73B]" />
+                <Users className="w-3.5 h-3.5 text-[#DCC58F]" />
                 <span>Funil de Leads & Pacientes</span>
               </button>
 
               <button
+                id="tab-crm-sub-whatsapp"
                 onClick={() => setCrmSubTab('whatsapp')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
                   crmSubTab === 'whatsapp'
                     ? 'bg-emerald-700 text-white shadow-xs'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
-                <span>WhatsApp & Lembretes Inteligentes</span>
+                <span>Disparos WhatsApp 1-Clique & Lembretes</span>
               </button>
 
               <button
-                onClick={() => setCrmSubTab('webhook')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
-                  crmSubTab === 'webhook'
-                    ? 'bg-[#31523D] text-white shadow-xs'
+                id="tab-crm-sub-automacoes"
+                onClick={() => setCrmSubTab('automacoes')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  crmSubTab === 'automacoes'
+                    ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                <Radio className="w-3.5 h-3.5 text-[#D0A73B]" />
-                <span>Disparos em Lote & Webhook</span>
-              </button>
-
-              <button
-                onClick={() => setCrmSubTab('ia_clinica')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
-                  crmSubTab === 'ia_clinica'
-                    ? 'bg-[#B44A2E] text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Brain className="w-3.5 h-3.5 text-[#FDE68A]" />
-                <span>Assistente Fisiolys (IA)</span>
-              </button>
-
-              <button
-                id="tab-crm-templates"
-                onClick={() => setCrmSubTab('templates')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
-                  crmSubTab === 'templates'
-                    ? 'bg-[#B08A3E] text-white shadow-xs font-bold'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <BookOpen className="w-3.5 h-3.5 text-[#D0A73B]" />
-                <span>Templates & Scripts</span>
+                <Radio className="w-3.5 h-3.5 text-[#DCC58F]" />
+                <span>Automações & Webhooks de Conversão</span>
               </button>
             </div>
 
             {/* Sub-view content */}
-            {crmSubTab === 'leads' && (
-              <FisiolysCRM initialTab="leads" />
+            {crmSubTab === 'funil' && (
+              <FisiolysCRM 
+                hub="crm" 
+                initialTab="leads" 
+                onTabChange={(t) => {
+                  if (t === 'leads') setCrmSubTab('funil');
+                  if (t === 'mensagens') setCrmSubTab('whatsapp');
+                  if (t === 'automacoes') setCrmSubTab('automacoes');
+                }}
+              />
             )}
 
             {crmSubTab === 'whatsapp' && (
               <AdminWhatsApp clinic={clinic} appointments={appointments} onReload={onReload} />
             )}
 
-            {crmSubTab === 'webhook' && (
+            {crmSubTab === 'automacoes' && (
               <AdminWebhook clinic={clinic} onReload={onReload} />
-            )}
-
-            {crmSubTab === 'ia_clinica' && (
-              <FisiolysCRM initialTab="ia_clinica" />
-            )}
-
-            {crmSubTab === 'templates' && (
-              <FisiolysCRM initialTab="templates" />
             )}
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* CONFIGURAÇÕES & SENHAS & QR CODE                                         */}
+        {/* HUB 5: ADMINISTRAÇÃO / CONFIGURAÇÃO (Serviços, IA, Métricas, Tarefas, Templates, Sistema) */}
         {/* ========================================================================= */}
         {activeTab === 'configuracoes' && (
-          <div className="space-y-6">
-            <AdminSettings clinic={clinic} onReload={onReload} />
-            <AdminQRCode clinic={clinic} />
+          <div className="space-y-4">
+            {/* Sub-nav pills for Administração */}
+            <div className="flex items-center gap-1.5 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-auto pb-1 sm:pb-0">
+              <button
+                id="tab-config-sub-servicos"
+                onClick={() => setConfigSubTab('servicos')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  configSubTab === 'servicos'
+                    ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Briefcase className="w-3.5 h-3.5 text-[#DCC58F]" />
+                <span>Serviços & Planos ({services.length})</span>
+              </button>
+
+              <button
+                id="tab-config-sub-ia"
+                onClick={() => setConfigSubTab('ia_clinica')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  configSubTab === 'ia_clinica'
+                    ? 'bg-[#B44A2E] text-white shadow-xs font-bold'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Brain className="w-3.5 h-3.5 text-[#FDE68A]" />
+                <span>Assistente IA Clínica (Gemini)</span>
+              </button>
+
+              <button
+                id="tab-config-sub-metricas"
+                onClick={() => setConfigSubTab('metricas')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  configSubTab === 'metricas'
+                    ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5 text-[#DCC58F]" />
+                <span>Desempenho & Métricas Clínicas</span>
+              </button>
+
+              <button
+                id="tab-config-sub-tarefas"
+                onClick={() => setConfigSubTab('tarefas')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  configSubTab === 'tarefas'
+                    ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <CheckSquare className="w-3.5 h-3.5 text-[#DCC58F]" />
+                <span>Lembretes & Tarefas</span>
+              </button>
+
+              <button
+                id="tab-config-sub-templates"
+                onClick={() => setConfigSubTab('templates')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  configSubTab === 'templates'
+                    ? 'bg-[#B08A3E] text-white shadow-xs font-bold'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5 text-[#FAF7F0]" />
+                <span>Templates da Dra. Elays</span>
+              </button>
+
+              <button
+                id="tab-config-sub-sistema"
+                onClick={() => setConfigSubTab('sistema')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                  configSubTab === 'sistema'
+                    ? 'bg-[#1B2E24] text-[#FAF7F0] shadow-xs ring-1 ring-[#DCC58F]/40'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Settings className="w-3.5 h-3.5 text-[#DCC58F]" />
+                <span>Configurações Gerais do Sistema</span>
+              </button>
+            </div>
+
+            {/* Sub-view content */}
+            {configSubTab === 'servicos' && (
+              <AdminServices services={services} onReload={onReload} />
+            )}
+
+            {configSubTab === 'ia_clinica' && (
+              <FisiolysCRM 
+                hub="configuracoes" 
+                initialTab="ia_clinica" 
+                onTabChange={(t) => {
+                  if (t === 'ia_clinica') setConfigSubTab('ia_clinica');
+                  if (t === 'analytics') setConfigSubTab('metricas');
+                  if (t === 'tarefas') setConfigSubTab('tarefas');
+                  if (t === 'templates') setConfigSubTab('templates');
+                }}
+              />
+            )}
+
+            {configSubTab === 'metricas' && (
+              <FisiolysCRM 
+                hub="configuracoes" 
+                initialTab="analytics" 
+                onTabChange={(t) => {
+                  if (t === 'ia_clinica') setConfigSubTab('ia_clinica');
+                  if (t === 'analytics') setConfigSubTab('metricas');
+                  if (t === 'tarefas') setConfigSubTab('tarefas');
+                  if (t === 'templates') setConfigSubTab('templates');
+                }}
+              />
+            )}
+
+            {configSubTab === 'tarefas' && (
+              <FisiolysCRM 
+                hub="configuracoes" 
+                initialTab="tarefas" 
+                onTabChange={(t) => {
+                  if (t === 'ia_clinica') setConfigSubTab('ia_clinica');
+                  if (t === 'analytics') setConfigSubTab('metricas');
+                  if (t === 'tarefas') setConfigSubTab('tarefas');
+                  if (t === 'templates') setConfigSubTab('templates');
+                }}
+              />
+            )}
+
+            {configSubTab === 'templates' && (
+              <FisiolysCRM 
+                hub="configuracoes" 
+                initialTab="templates" 
+                onTabChange={(t) => {
+                  if (t === 'ia_clinica') setConfigSubTab('ia_clinica');
+                  if (t === 'analytics') setConfigSubTab('metricas');
+                  if (t === 'tarefas') setConfigSubTab('tarefas');
+                  if (t === 'templates') setConfigSubTab('templates');
+                }}
+              />
+            )}
+
+            {configSubTab === 'sistema' && (
+              <div className="space-y-6">
+                <AdminSettings clinic={clinic} onReload={onReload} />
+                <AdminSchedule schedule={schedule} onReload={onReload} />
+                <AdminQRCode clinic={clinic} />
+              </div>
+            )}
           </div>
         )}
 

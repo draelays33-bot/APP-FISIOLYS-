@@ -51,16 +51,22 @@ export type CrmSidebarTab =
   | 'ia_clinica'
   | string;
 
+export type FisiolysHubContext = 'pacientes' | 'crm' | 'configuracoes' | 'all';
+
 interface FisiolysCRMProps {
   initialTab?: CrmSidebarTab;
+  hub?: FisiolysHubContext;
   onBackToSite?: () => void;
   onOpenGeminiChat?: () => void;
+  onTabChange?: (tab: CrmSidebarTab) => void;
 }
 
 export const FisiolysCRM: React.FC<FisiolysCRMProps> = ({
   initialTab = 'leads',
+  hub,
   onBackToSite,
-  onOpenGeminiChat
+  onOpenGeminiChat,
+  onTabChange
 }) => {
   const [activeTab, setActiveTab] = useState<CrmSidebarTab>(initialTab);
 
@@ -69,6 +75,23 @@ export const FisiolysCRM: React.FC<FisiolysCRMProps> = ({
       setActiveTab(initialTab);
     }
   }, [initialTab]);
+
+  const handleSelectTab = (tab: CrmSidebarTab) => {
+    setActiveTab(tab);
+    onTabChange?.(tab);
+  };
+
+  // Determine current hub: explicit prop, or inferred from current active tab
+  const currentHub: FisiolysHubContext = hub || (
+    ['avaliacoes', 'evolucoes', 'tcle'].includes(activeTab) ? 'pacientes' :
+    ['leads', 'mensagens', 'automacoes'].includes(activeTab) ? 'crm' :
+    ['ia_clinica', 'analytics', 'tarefas', 'templates'].includes(activeTab) ? 'configuracoes' :
+    'all'
+  );
+
+  const showProntuario = currentHub === 'pacientes' || currentHub === 'all';
+  const showComunicacao = currentHub === 'crm' || currentHub === 'all';
+  const showInteligencia = currentHub === 'configuracoes' || currentHub === 'all';
   const [leads, setLeads] = useState<CrmLead[]>([]);
   const [appointments, setAppointments] = useState<CrmAppointmentItem[]>([]);
   const [clinicAppointments, setClinicAppointments] = useState<Appointment[]>([]);
@@ -1157,229 +1180,258 @@ export const FisiolysCRM: React.FC<FisiolysCRMProps> = ({
                 <span>Fisiolys</span>
               </h2>
               <span className="block text-[9px] uppercase tracking-wider text-[#DCC58F] font-bold">
-                DRA. ELAYS MARINHO · CRM & CLÍNICA
+                {currentHub === 'pacientes' && 'DRA. ELAYS MARINHO · PRONTUÁRIO CLÍNICO'}
+                {currentHub === 'crm' && 'DRA. ELAYS MARINHO · CRM & VENDAS'}
+                {currentHub === 'configuracoes' && 'DRA. ELAYS MARINHO · INTELIGÊNCIA & GESTÃO'}
+                {currentHub === 'all' && 'DRA. ELAYS MARINHO · CRM & CLÍNICA'}
               </span>
             </div>
           </div>
 
-          {/* Navigation Menu List Organizado por Seções */}
+          {/* Navigation Menu List Organizado por Seções e Filtrado por Hub */}
           <nav className="space-y-4">
             
-            {/* SEÇÃO 1: CLÍNICA & PRONTUÁRIO */}
-            <div className="space-y-1">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#DCC58F] px-2 block">
-                📋 Prontuário & Templates
-              </span>
-
-              {/* Fichas de Avaliação */}
-              <button
-                id="crm-tab-avaliacoes"
-                onClick={() => setActiveTab('avaliacoes')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === 'avaliacoes'
-                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40 ring-1 ring-[#DCC58F]/30'
-                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
-                }`}
-              >
-                <div className="flex items-center space-x-2.5">
-                  <FileText className={`w-4 h-4 ${activeTab === 'avaliacoes' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
-                  <span className="truncate">Fichas de Avaliação</span>
-                </div>
-                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#16251D] text-[#DCC58F]">
-                  {avaliacoes.length}
+            {/* SEÇÃO 1: CLÍNICA & PRONTUÁRIO (Hub Pacientes) */}
+            {showProntuario && (
+              <div className="space-y-1">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#DCC58F] px-2 block">
+                  📋 Prontuário Clínico
                 </span>
-              </button>
 
-              {/* Evoluções & Frequência */}
-              <button
-                id="crm-tab-evolucoes"
-                onClick={() => setActiveTab('evolucoes')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === 'evolucoes'
-                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40 ring-1 ring-[#DCC58F]/30'
-                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
-                }`}
-              >
-                <div className="flex items-center space-x-2.5">
-                  <TrendingUp className={`w-4 h-4 ${activeTab === 'evolucoes' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
-                  <span className="truncate">Evoluções & Sessões</span>
-                </div>
-              </button>
+                {/* Fichas de Avaliação */}
+                <button
+                  id="crm-tab-avaliacoes"
+                  onClick={() => handleSelectTab('avaliacoes')}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'avaliacoes'
+                      ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40 ring-1 ring-[#DCC58F]/30'
+                      : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <FileText className={`w-4 h-4 ${activeTab === 'avaliacoes' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                    <span className="truncate">Fichas de Avaliação</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#16251D] text-[#DCC58F]">
+                    {avaliacoes.length}
+                  </span>
+                </button>
 
-              {/* TCLE & Contratos */}
-              <button
-                id="crm-tab-tcle"
-                onClick={() => setActiveTab('tcle')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === 'tcle'
-                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40 ring-1 ring-[#DCC58F]/30'
-                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
-                }`}
-              >
-                <div className="flex items-center space-x-2.5">
-                  <ShieldCheck className={`w-4 h-4 ${activeTab === 'tcle' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
-                  <span className="truncate">TCLE & Contratos</span>
-                </div>
-                <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-[#16251D] text-emerald-300">
-                  COFFITO
+                {/* Evoluções & Frequência */}
+                <button
+                  id="crm-tab-evolucoes"
+                  onClick={() => handleSelectTab('evolucoes')}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'evolucoes'
+                      ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40 ring-1 ring-[#DCC58F]/30'
+                      : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <TrendingUp className={`w-4 h-4 ${activeTab === 'evolucoes' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                    <span className="truncate">Evoluções & Sessões</span>
+                  </div>
+                </button>
+
+                {/* TCLE & Contratos */}
+                <button
+                  id="crm-tab-tcle"
+                  onClick={() => handleSelectTab('tcle')}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'tcle'
+                      ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40 ring-1 ring-[#DCC58F]/30'
+                      : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <ShieldCheck className={`w-4 h-4 ${activeTab === 'tcle' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                    <span className="truncate">TCLE & Contratos</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-[#16251D] text-emerald-300">
+                    COFFITO
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {/* SEÇÃO 2: COMUNICAÇÃO & ATENDIMENTO (Hub CRM) */}
+            {showComunicacao && (
+              <div className="space-y-1">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#DCC58F] px-2 block">
+                  💬 Comunicação & Funil
                 </span>
-              </button>
 
-              {/* Templates da Dra. Elays */}
-              <button
-                id="crm-tab-templates"
-                onClick={() => setActiveTab('templates')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === 'templates'
-                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40 ring-1 ring-[#DCC58F]/30'
-                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
-                }`}
-              >
-                <div className="flex items-center space-x-2.5">
-                  <BookOpen className={`w-4 h-4 ${activeTab === 'templates' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
-                  <span className="truncate font-bold">Templates da Dra. Elays</span>
-                </div>
-                <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-linear-to-r from-[#DCC58F] to-[#B08A3E] text-[#1B2E24]">
-                  Novo
+                {/* Funil de Leads & Pacientes */}
+                <button
+                  id="crm-tab-leads"
+                  onClick={() => handleSelectTab('leads')}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'leads'
+                      ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
+                      : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <Users className={`w-4 h-4 ${activeTab === 'leads' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                    <span className="truncate">Funil de Leads & Pacientes</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#16251D] text-[#DCC58F]">
+                    {leads.length || 6}
+                  </span>
+                </button>
+
+                {/* Disparos WhatsApp */}
+                <button
+                  id="crm-tab-mensagens"
+                  onClick={() => handleSelectTab('mensagens')}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'mensagens'
+                      ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
+                      : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <Send className={`w-4 h-4 ${activeTab === 'mensagens' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                    <span className="truncate">Disparos WhatsApp 1-Clique</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-[#16251D] text-[#DCC58F]">
+                    1-Clique
+                  </span>
+                </button>
+
+                {/* Automações & Webhooks */}
+                <button
+                  id="crm-tab-automacoes"
+                  onClick={() => handleSelectTab('automacoes')}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'automacoes'
+                      ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
+                      : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <Zap className={`w-4 h-4 ${activeTab === 'automacoes' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                    <span className="truncate">Automações & Webhooks</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-[#16251D] text-emerald-300">
+                    API
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {/* SEÇÃO 3: INTELIGÊNCIA & GESTÃO (Hub Configurações) */}
+            {showInteligencia && (
+              <div className="space-y-1">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#DCC58F] px-2 block">
+                  🧠 Inteligência & Gestão
                 </span>
-              </button>
-            </div>
 
-            {/* SEÇÃO 2: COMUNICAÇÃO & ATENDIMENTO */}
-            <div className="space-y-1">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#DCC58F] px-2 block">
-                💬 Comunicação & Funil
-              </span>
+                {/* Assistente IA Clínica */}
+                <button
+                  id="crm-tab-ia-clinica"
+                  onClick={() => handleSelectTab('ia_clinica')}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'ia_clinica'
+                      ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
+                      : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <Bot className={`w-4 h-4 ${activeTab === 'ia_clinica' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                    <span className="truncate">Assistente IA Clínica</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-linear-to-r from-amber-500 to-amber-600 text-white">
+                    IA PRO
+                  </span>
+                </button>
 
-              {/* Funil de Leads & Pacientes */}
-              <button
-                id="crm-tab-leads"
-                onClick={() => setActiveTab('leads')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === 'leads'
-                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
-                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
-                }`}
-              >
-                <div className="flex items-center space-x-2.5">
-                  <Users className={`w-4 h-4 ${activeTab === 'leads' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
-                  <span className="truncate">Funil de Leads & Pacientes</span>
-                </div>
-                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#16251D] text-[#DCC58F]">
-                  {leads.length || 6}
-                </span>
-              </button>
+                {/* Desempenho & Analytics */}
+                <button
+                  id="crm-tab-analytics"
+                  onClick={() => handleSelectTab('analytics')}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'analytics'
+                      ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
+                      : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <Activity className={`w-4 h-4 ${activeTab === 'analytics' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                    <span className="truncate">Desempenho & Métricas</span>
+                  </div>
+                </button>
 
-              {/* Disparos WhatsApp */}
-              <button
-                id="crm-tab-mensagens"
-                onClick={() => setActiveTab('mensagens')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === 'mensagens'
-                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
-                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
-                }`}
-              >
-                <div className="flex items-center space-x-2.5">
-                  <Send className={`w-4 h-4 ${activeTab === 'mensagens' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
-                  <span className="truncate">Disparos WhatsApp 1-Clique</span>
-                </div>
-                <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-[#16251D] text-[#DCC58F]">
-                  1-Clique
-                </span>
-              </button>
+                {/* Lembretes & Tarefas */}
+                <button
+                  id="crm-tab-tarefas"
+                  onClick={() => handleSelectTab('tarefas')}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'tarefas'
+                      ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
+                      : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <CheckSquare className={`w-4 h-4 ${activeTab === 'tarefas' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                    <span className="truncate">Lembretes & Tarefas</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#16251D] text-[#DCC58F]">
+                    {tasks.filter(t => !t.concluida).length}
+                  </span>
+                </button>
 
-              {/* Automações & Webhooks */}
-              <button
-                id="crm-tab-automacoes"
-                onClick={() => setActiveTab('automacoes')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === 'automacoes'
-                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
-                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
-                }`}
-              >
-                <div className="flex items-center space-x-2.5">
-                  <Zap className={`w-4 h-4 ${activeTab === 'automacoes' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
-                  <span className="truncate">Automações & Webhooks</span>
-                </div>
-                <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-[#16251D] text-emerald-300">
-                  API
-                </span>
-              </button>
-            </div>
-
-            {/* SEÇÃO 3: INTELIGÊNCIA & GESTÃO */}
-            <div className="space-y-1">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#DCC58F] px-2 block">
-                🧠 Inteligência & Gestão
-              </span>
-
-              {/* Assistente IA Clínica */}
-              <button
-                id="crm-tab-ia-clinica"
-                onClick={() => setActiveTab('ia_clinica')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === 'ia_clinica'
-                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
-                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
-                }`}
-              >
-                <div className="flex items-center space-x-2.5">
-                  <Bot className={`w-4 h-4 ${activeTab === 'ia_clinica' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
-                  <span className="truncate">Assistente IA Clínica</span>
-                </div>
-                <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-linear-to-r from-amber-500 to-amber-600 text-white">
-                  IA PRO
-                </span>
-              </button>
-
-              {/* Desempenho & Analytics */}
-              <button
-                id="crm-tab-analytics"
-                onClick={() => setActiveTab('analytics')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === 'analytics'
-                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
-                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
-                }`}
-              >
-                <div className="flex items-center space-x-2.5">
-                  <Activity className={`w-4 h-4 ${activeTab === 'analytics' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
-                  <span className="truncate">Desempenho & Métricas</span>
-                </div>
-              </button>
-
-              {/* Lembretes & Tarefas */}
-              <button
-                id="crm-tab-tarefas"
-                onClick={() => setActiveTab('tarefas')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === 'tarefas'
-                    ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40'
-                    : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
-                }`}
-              >
-                <div className="flex items-center space-x-2.5">
-                  <CheckSquare className={`w-4 h-4 ${activeTab === 'tarefas' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
-                  <span className="truncate">Lembretes & Tarefas</span>
-                </div>
-                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#16251D] text-[#DCC58F]">
-                  {tasks.filter(t => !t.concluida).length}
-                </span>
-              </button>
-            </div>
+                {/* Templates da Dra. Elays */}
+                <button
+                  id="crm-tab-templates"
+                  onClick={() => handleSelectTab('templates')}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'templates'
+                      ? 'bg-[#243F30] text-[#DCC58F] shadow-sm font-bold border border-[#B08A3E]/40 ring-1 ring-[#DCC58F]/30'
+                      : 'text-[#C9D1C8] hover:text-white hover:bg-[#20372B]'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <BookOpen className={`w-4 h-4 ${activeTab === 'templates' ? 'text-[#DCC58F]' : 'text-[#8EA593]'}`} />
+                    <span className="truncate font-bold">Templates da Dra. Elays</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-linear-to-r from-[#DCC58F] to-[#B08A3E] text-[#1B2E24]">
+                    Novo
+                  </span>
+                </button>
+              </div>
+            )}
 
           </nav>
         </div>
 
-        {/* Notice for Clinical Records in Prontuário */}
-        <div className="mt-4 p-3 bg-[#16271E] rounded-xl border border-[#2B4536] text-[11px] text-[#A2ADA5] space-y-1">
-          <span className="font-bold text-[#DCC58F] block">📋 Prontuário Clínico:</span>
-          <p className="text-[10px] leading-relaxed">
-            Evoluções do paciente, fichas de avaliação e TCLE estão salvos com sigilo ético na área exclusiva de Prontuário da Dra. Elays.
-          </p>
-        </div>
+        {/* Informative Notice Box filtered per Hub */}
+        {showProntuario && (
+          <div className="mt-4 p-3 bg-[#16271E] rounded-xl border border-[#2B4536] text-[11px] text-[#A2ADA5] space-y-1">
+            <span className="font-bold text-[#DCC58F] block">📋 Prontuário Clínico:</span>
+            <p className="text-[10px] leading-relaxed">
+              Evoluções do paciente, fichas de avaliação e TCLE estão salvos com sigilo ético na área exclusiva de Prontuário da Dra. Elays.
+            </p>
+          </div>
+        )}
+
+        {showComunicacao && !showProntuario && (
+          <div className="mt-4 p-3 bg-[#16271E] rounded-xl border border-[#2B4536] text-[11px] text-[#A2ADA5] space-y-1">
+            <span className="font-bold text-[#DCC58F] block">💬 Central de CRM:</span>
+            <p className="text-[10px] leading-relaxed">
+              Funil ativo de leads, captação e disparos via WhatsApp integrados para conversão e fidelização.
+            </p>
+          </div>
+        )}
+
+        {showInteligencia && !showProntuario && !showComunicacao && (
+          <div className="mt-4 p-3 bg-[#16271E] rounded-xl border border-[#2B4536] text-[11px] text-[#A2ADA5] space-y-1">
+            <span className="font-bold text-[#DCC58F] block">🧠 Inteligência & Gestão:</span>
+            <p className="text-[10px] leading-relaxed">
+              Modelos IA Gemini, métricas de desempenho e templates configurados para a rotina da clínica.
+            </p>
+          </div>
+        )}
 
         {/* Mascot Bottom Card Widget (Matching Screenshot) */}
         <div className="mt-6 pt-4 border-t border-[#233B2E] space-y-3">
