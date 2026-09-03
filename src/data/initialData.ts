@@ -8,7 +8,7 @@ export const initialClinicConfig: ClinicConfig = {
   address: "Av. Coronel José Porfírio, nº 3025 - Recreio",
   city: "Altamira - Pará",
   managerName: "Dra. Elays Marinho",
-  managerCpf: "931.614.092-72",
+  managerCpf: "CPF não cadastrado",
   managerCrefito: "CREFITO-12",
   logoUrl: "/src/assets/images/fisiolys_logo_official_1787403576890.jpg",
   webhookUrl: "https://n8n.webhook.site/v1/agendamento-fisiolys",

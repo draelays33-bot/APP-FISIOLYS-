@@ -1,26 +1,13 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Patient, Appointment, Service, LoyaltyMember, CrmLead, CrmAvaliacao } from '../types';
 
-// Detect Supabase environment variables from client-side Vite or Node runtime
-const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || 
-                    (import.meta as any).env?.SUPABASE_URL ||
-                    (typeof process !== 'undefined' ? process.env?.SUPABASE_URL || process.env?.VITE_SUPABASE_URL : '') || '';
+// Detect Supabase environment variables from client-side Vite runtime (ONLY anon/public keys)
+const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
 
 const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
-                         (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 
-                         (import.meta as any).env?.SUPABASE_ANON_KEY ||
-                         (import.meta as any).env?.SUPABASE_SECRET_KEY ||
-                         (typeof process !== 'undefined' ? 
-                            process.env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
-                            process.env?.SUPABASE_ANON_KEY || 
-                            process.env?.VITE_SUPABASE_ANON_KEY || 
-                            process.env?.SUPABASE_SECRET_KEY ||
-                            process.env?.SUPABASE_SERVICE_ROLE_KEY : '') || '';
+                         (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
 
-export const ADMIN_EMAIL = (import.meta as any).env?.VITE_ADMIN_EMAIL ||
-                           (import.meta as any).env?.ADMIN_EMAIL ||
-                           (typeof process !== 'undefined' ? process.env?.ADMIN_EMAIL || process.env?.VITE_ADMIN_EMAIL : '') || 
-                           'dra.elays33@gmail.com';
+export const ADMIN_EMAIL = (import.meta as any).env?.VITE_ADMIN_EMAIL || 'dra.elays33@gmail.com';
 
 let supabaseInstance: SupabaseClient | null = null;
 
@@ -154,23 +141,60 @@ CREATE TABLE IF NOT EXISTS public.loyalty_members (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- 5. POLÍTICAS DE ACESSO (ROW LEVEL SECURITY)
+-- 5. TABELA DE LEADS DO CRM
+CREATE TABLE IF NOT EXISTS public.crm_leads (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    email TEXT,
+    service_interest TEXT,
+    origin TEXT DEFAULT 'whatsapp',
+    pipeline_stage TEXT DEFAULT 'novo_contato',
+    lead_score INTEGER DEFAULT 50,
+    tags TEXT[] DEFAULT '{}',
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- 6. TABELA DE AVALIAÇÕES FISIOTERAPÊUTICAS (PRONTUÁRIO)
+CREATE TABLE IF NOT EXISTS public.crm_avaliacoes (
+    id TEXT PRIMARY KEY,
+    patient_id TEXT,
+    patient_name TEXT NOT NULL,
+    evaluator_name TEXT,
+    clinical_history TEXT,
+    main_complaint TEXT,
+    postural_diagnosis TEXT,
+    treatment_plan TEXT,
+    evaluation_date DATE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- 7. POLÍTICAS DE ACESSO (ROW LEVEL SECURITY)
 ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.loyalty_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.crm_leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.crm_avaliacoes ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Acesso público e autenticado aos dados da clínica" 
+CREATE POLICY "Acesso aos dados de pacientes" 
 ON public.patients FOR ALL USING (true);
 
-CREATE POLICY "Acesso público e autenticado aos agendamentos" 
+CREATE POLICY "Acesso aos agendamentos" 
 ON public.appointments FOR ALL USING (true);
 
-CREATE POLICY "Acesso público e autenticado aos serviços" 
+CREATE POLICY "Acesso aos serviços" 
 ON public.services FOR ALL USING (true);
 
-CREATE POLICY "Acesso público e autenticado ao clube fidelidade" 
+CREATE POLICY "Acesso ao clube fidelidade" 
 ON public.loyalty_members FOR ALL USING (true);
+
+CREATE POLICY "Acesso aos leads do crm" 
+ON public.crm_leads FOR ALL USING (true);
+
+CREATE POLICY "Acesso às avaliações clínicas" 
+ON public.crm_avaliacoes FOR ALL USING (true);
 `;
 }
 

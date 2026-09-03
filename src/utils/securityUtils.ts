@@ -5,7 +5,7 @@
 
 export const DEFAULT_ADMIN_PASSWORD = '011809';
 
-export const DEFAULT_DOCTOR_CPF = '931.614.092-72';
+export const DEFAULT_DOCTOR_CPF = 'CPF não cadastrado';
 
 const STORAGE_ADMIN_PASSWORD_KEY = 'fisiolys_admin_password';
 const STORAGE_FINANCIAL_PASSWORD_KEY = 'fisiolys_financial_password';
@@ -13,7 +13,7 @@ const STORAGE_DOCTOR_CPF_KEY = 'fisiolys_dr_cpf';
 
 /**
  * Gets the current configured password for Admin Panel access.
- * Defaults to '011809' if not customized.
+ * Defaults to initial setup password if not customized.
  */
 export function getAdminPassword(): string {
   try {
@@ -76,23 +76,27 @@ export function setFinancialPassword(newPassword: string): boolean {
 }
 
 /**
- * Verifies if entered password matches the current Admin password.
+ * Verifies if entered password matches ONLY the currently active Admin password.
+ * Once changed, the default password is never accepted.
  */
 export function verifyAdminPassword(entered: string): boolean {
+  if (!entered) return false;
   const current = getAdminPassword();
-  return entered.trim() === current || entered.trim() === DEFAULT_ADMIN_PASSWORD;
+  return entered.trim() === current;
 }
 
 /**
- * Verifies if entered password matches the Financial Module password.
+ * Verifies if entered password matches ONLY the active Financial Module password.
+ * Once changed, the default password is never accepted.
  */
 export function verifyFinancialPassword(entered: string): boolean {
+  if (!entered) return false;
   const current = getFinancialPassword();
-  return entered.trim() === current || entered.trim() === DEFAULT_ADMIN_PASSWORD;
+  return entered.trim() === current;
 }
 
 /**
- * Resets all passwords to the official default (011809).
+ * Resets all passwords to the initial setup default.
  */
 export function resetPasswordsToDefault(): void {
   try {
@@ -109,17 +113,17 @@ export function resetPasswordsToDefault(): void {
 export function getDoctorCpf(fallback: string = DEFAULT_DOCTOR_CPF): string {
   try {
     const saved = localStorage.getItem(STORAGE_DOCTOR_CPF_KEY);
-    if (saved && saved.trim().length > 0 && !saved.includes('000.000.000-00')) {
+    if (saved && saved.trim().length > 0 && !saved.includes('000.000.000-00') && saved !== 'CPF não cadastrado') {
       return saved.trim();
     }
   } catch (e) {
     console.error('Error reading doctor CPF', e);
   }
-  return fallback;
+  return fallback || DEFAULT_DOCTOR_CPF;
 }
 
 /**
- * Sets the doctor's registered CPF.
+ * Sets the doctor's registered CPF in storage.
  */
 export function setDoctorCpf(cpf: string): void {
   try {
