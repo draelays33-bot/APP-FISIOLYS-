@@ -128,7 +128,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ clinic, onReload }
 
   // Handle Reset to Default
   const handleResetPasswords = () => {
-    if (window.confirm('Deseja realmente restaurar as senhas para o padrão de fábrica (011809)?')) {
+    if (window.confirm('Deseja realmente restaurar as senhas para o padrão da clínica?')) {
       resetPasswordsToDefault();
       setCurrentAdminPass(DEFAULT_ADMIN_PASSWORD);
       setCurrentFinancialPass(DEFAULT_ADMIN_PASSWORD);
@@ -136,7 +136,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ clinic, onReload }
       setConfirmAdminPass('');
       setNewFinancialPass('');
       setConfirmFinancialPass('');
-      showNotification('success', `Senhas restauradas para o padrão (${DEFAULT_ADMIN_PASSWORD}).`);
+      showNotification('success', 'Senhas restauradas para o padrão inicial da clínica com sucesso.');
     }
   };
 
@@ -163,10 +163,10 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ clinic, onReload }
         <button
           onClick={handleResetPasswords}
           className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all border border-white/20 flex items-center space-x-1.5 shrink-0 cursor-pointer"
-          title="Restaurar senhas para 011809"
+          title="Restaurar senhas para o padrão inicial"
         >
           <RotateCcw className="w-3.5 h-3.5 text-[#D0A73B]" />
-          <span>Restaurar Senha Padrão (011809)</span>
+          <span>Restaurar Senha Padrão</span>
         </button>
       </div>
 
@@ -213,19 +213,14 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ clinic, onReload }
           </div>
 
           <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs flex items-center justify-between">
-            <span className="text-slate-500 font-medium">Senha Atual em Uso:</span>
+            <span className="text-slate-500 font-medium">Status da Senha Atual:</span>
             <div className="flex items-center space-x-2">
               <span className="font-mono font-black text-slate-800">
-                {showAdminPass ? currentAdminPass : '••••••'}
+                ••••••••
               </span>
-              <button
-                type="button"
-                onClick={() => setShowAdminPass(!showAdminPass)}
-                className="text-slate-400 hover:text-slate-600 p-1"
-                title={showAdminPass ? "Ocultar senha" : "Ver senha"}
-              >
-                {showAdminPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              </button>
+              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-bold">
+                Definida
+              </span>
             </div>
           </div>
 
@@ -288,19 +283,14 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ clinic, onReload }
           </div>
 
           <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs flex items-center justify-between">
-            <span className="text-slate-500 font-medium">Senha Financeira Atual:</span>
+            <span className="text-slate-500 font-medium">Status da Senha Financeira:</span>
             <div className="flex items-center space-x-2">
               <span className="font-mono font-black text-slate-800">
-                {showFinancialPass ? currentFinancialPass : '••••••'}
+                ••••••••
               </span>
-              <button
-                type="button"
-                onClick={() => setShowFinancialPass(!showFinancialPass)}
-                className="text-slate-400 hover:text-slate-600 p-1"
-                title={showFinancialPass ? "Ocultar senha" : "Ver senha"}
-              >
-                {showFinancialPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              </button>
+              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-bold">
+                Definida
+              </span>
             </div>
           </div>
 

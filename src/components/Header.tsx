@@ -75,7 +75,7 @@ export const Header: React.FC<HeaderProps> = ({
       onAdminLoginSuccess();
       onViewChange(targetViewAfterAuth || 'admin');
     } else {
-      setPasswordError('Senha incorreta! Por favor, digite a senha master da Dra. Elays (011809).');
+      setPasswordError('Senha incorreta! Por favor, digite a sua senha de administradora.');
     }
   };
 
@@ -222,7 +222,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-[#1B2E24] text-[#FAF7F0] border-[#DCC58F] ring-2 ring-[#DCC58F]/40'
                     : 'bg-[#1B2E24] hover:bg-[#22392C] text-[#FAF7F0] border-[#1B2E24]'
                 }`}
-                title={isAdminAuthenticated ? "Painel Interno de Gestão da Dra. Elays" : "Área Restrita da Dra. Elays (Senha: 011809)"}
+                title={isAdminAuthenticated ? "Painel Interno de Gestão da Dra. Elays" : "Área Restrita da Dra. Elays"}
               >
                 <Shield className="w-3.5 h-3.5 text-[#DCC58F]" />
                 <span>Área da Dra. Elays</span>
@@ -282,7 +282,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-[#1B2E24] text-[#FAF7F0] border-[#DCC58F] ring-2 ring-[#DCC58F]/40'
                     : 'bg-[#1B2E24] hover:bg-[#22392C] text-[#FAF7F0] border-[#1B2E24]'
                 }`}
-                title={isAdminAuthenticated ? "Painel Interno de Gestão da Dra. Elays" : "Área Restrita da Dra. Elays (Senha: 011809)"}
+                title={isAdminAuthenticated ? "Painel Interno de Gestão da Dra. Elays" : "Área Restrita da Dra. Elays"}
               >
                 <Shield className="w-3.5 h-3.5 text-[#DCC58F]" />
                 <span>Área Dra. Elays</span>
@@ -494,8 +494,7 @@ export const Header: React.FC<HeaderProps> = ({
             <form onSubmit={handlePasswordSubmit} className="mt-6 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-[#26241F] uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                  <span>Senha Master de Acesso:</span>
-                  <span className="text-[11px] font-normal text-[#848278]">(Padrão: 011809)</span>
+                  <span>Senha de Acesso da Dra. Elays:</span>
                 </label>
                 <div className="relative">
                   <KeyRound className="w-4 h-4 text-[#5B5A52] absolute left-3.5 top-3" />

@@ -201,7 +201,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, c
                   <span>Senha do Painel Gestor</span>
                 </span>
                 <span className="text-[10px] font-mono font-bold bg-[#EAF0DB] text-[#31523D] px-2 py-0.5 rounded-md">
-                  Atual: {showAdminPass ? currentAdminPass : '••••••'}
+                  Status: Protegida
                 </span>
               </div>
 
@@ -222,15 +222,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, c
                     className="px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-900 text-xs focus:ring-1 focus:ring-[#31523D]"
                   />
                 </div>
-                <div className="flex items-center justify-between pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowAdminPass(!showAdminPass)}
-                    className="text-[11px] text-slate-500 hover:text-slate-800 flex items-center space-x-1"
-                  >
-                    {showAdminPass ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                    <span>{showAdminPass ? 'Ocultar' : 'Ver atual'}</span>
-                  </button>
+                <div className="flex items-center justify-end pt-1">
                   <button
                     type="submit"
                     className="px-3 py-1.5 bg-[#31523D] hover:bg-[#23372B] text-white rounded-lg font-bold text-xs shadow-2xs cursor-pointer"
@@ -249,7 +241,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, c
                   <span>Senha Gestão Financeira</span>
                 </span>
                 <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">
-                  Atual: {showFinancialPass ? currentFinancialPass : '••••••'}
+                  Status: Protegida
                 </span>
               </div>
 
@@ -270,15 +262,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, c
                     className="px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-900 text-xs focus:ring-1 focus:ring-emerald-700"
                   />
                 </div>
-                <div className="flex items-center justify-between pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowFinancialPass(!showFinancialPass)}
-                    className="text-[11px] text-slate-500 hover:text-slate-800 flex items-center space-x-1"
-                  >
-                    {showFinancialPass ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                    <span>{showFinancialPass ? 'Ocultar' : 'Ver atual'}</span>
-                  </button>
+                <div className="flex items-center justify-end pt-1">
                   <button
                     type="submit"
                     className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg font-bold text-xs shadow-2xs cursor-pointer"

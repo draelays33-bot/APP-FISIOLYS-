@@ -106,9 +106,8 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
   onNavigateToBooking,
   onReload,
 }) => {
-  // Authentication State via Patient CPF (acting as password)
+  // Authentication State via Patient CPF
   const [cpfPasswordInput, setCpfPasswordInput] = useState<string>('');
-  const [showPasswordMask, setShowPasswordMask] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
 
@@ -740,38 +739,40 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
             </h1>
 
             <p className="text-xs sm:text-sm text-[#736B5E] max-w-md mx-auto leading-relaxed">
-              Para proteger seus dados clínicos, evoluções de sessões, ficha de avaliação com anexos e contratos assinados, informe a sua <strong className="text-[#1B2E24]">senha de acesso (seu CPF)</strong>.
+              Para proteger seus dados clínicos, evoluções de sessões, ficha de avaliação com anexos e contratos assinados com sigilo, informe o <strong className="text-[#1B2E24]">CPF do paciente cadastrado</strong>.
             </p>
           </div>
 
           {/* CPF Form */}
           <form onSubmit={e => { e.preventDefault(); handleAuthenticateCpf(); }} className="space-y-4 pt-2">
             <div>
-              <label className="block text-xs font-bold text-[#1B2E24] uppercase tracking-wider mb-2">
-                Senha de Acesso (CPF do Paciente)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="input-patient-cpf-password" className="block text-xs font-bold text-[#1B2E24] uppercase tracking-wider">
+                  CPF do Paciente
+                </label>
+                <span className="text-[11px] text-[#736B5E] font-medium">
+                  Somente números ou com pontuação
+                </span>
+              </div>
 
               <div className="relative flex items-center">
                 <KeyRound className="w-5 h-5 absolute left-3.5 text-[#736B5E]" />
                 <input
                   id="input-patient-cpf-password"
-                  type={showPasswordMask ? 'text' : 'password'}
+                  type="text"
                   inputMode="numeric"
                   value={cpfPasswordInput}
                   onChange={handleCpfInputChange}
                   placeholder="000.000.000-00"
-                  className="w-full pl-11 pr-12 py-3.5 bg-white rounded-2xl border border-[#D5CCA4] text-[#1B2E24] font-mono text-base font-bold tracking-widest focus:ring-2 focus:ring-[#B08A3E] focus:outline-none transition-all placeholder:text-[#9E9585]"
+                  maxLength={14}
+                  className="w-full pl-11 pr-4 py-3.5 bg-white rounded-2xl border border-[#D5CCA4] text-[#1B2E24] font-mono text-base font-bold tracking-widest focus:ring-2 focus:ring-[#B08A3E] focus:outline-none transition-all placeholder:text-[#9E9585]"
                   autoFocus
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordMask(!showPasswordMask)}
-                  className="absolute right-3.5 text-[#736B5E] hover:text-[#1B2E24] p-1.5 rounded-lg transition-colors cursor-pointer"
-                  title={showPasswordMask ? 'Ocultar CPF' : 'Mostrar dígitos do CPF'}
-                >
-                  {showPasswordMask ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
               </div>
+
+              <p className="text-[11px] text-[#736B5E] mt-1.5">
+                Digite o CPF cadastrado na clínica para carregar com sigilo seu prontuário, planos e recibos.
+              </p>
 
               {authError && (
                 <div className="mt-2.5 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start space-x-2 animate-in fade-in duration-150">

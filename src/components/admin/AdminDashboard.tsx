@@ -811,7 +811,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </p>
                   )}
                   <p className="text-[11px] text-slate-400 mt-1 text-center font-medium">
-                    (Senha configurável da Dra. Elays • Padrão: <code className="font-mono font-bold text-slate-600 bg-slate-100 px-1 py-0.5 rounded">011809</code>)
+                    (Senha configurável da Dra. Elays no menu de configurações)
                   </p>
                 </div>
 
